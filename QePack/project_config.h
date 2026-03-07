@@ -125,6 +125,15 @@
 
 /* EMM_V5 相关 (待测试) */
 #define EMM_V5_IS_ENABLE                                0                               // EMM_V5 模块总开关
+
+/* W25Q64 相关 */
+#define W25Q64_IS_ENABLE                                0                               // W25Q64 模块总开关
+#define W25Q64_DEV_NUM                                  1                               // W25Q64 设备数量
+#define W25Q64_SECTOR_SIZE                              4096                            // W25Q64 扇区大小（4KB）
+#define W25Q64_PAGE_SIZE                                256                             // W25Q64 页大小（256B）
+#define W25Q64_TOTAL_SIZE                               (8 * 1024 * 1024)               // W25Q64 总容量（8MB）
+#define W25Q640                                         emW25q64DevNum0
+
 #endif
 
 
