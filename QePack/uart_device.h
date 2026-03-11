@@ -148,16 +148,6 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum);
 uint8_t ucFrameHead[] = {0xAA, 0x55};
 uint8_t ucFrameTail[] = {0x0D, 0x0A};
 
-// 1.5 定义回调函数
-void fun(emUartDevNumTdf emDevNum, stUartRunningParamTdf* pstRunningParamTdf){
-    // 非DMA模式使用这个
-    //vUartSendArray(UART1, pstRunningParamTdf->aucRxBuf, 1);
-    
-    // DMA模式使用这个 
-    vUartSendArray(UART1, pstRunningParamTdf->aucRxBuf, pstRunningParamTdf->ulRxCount);
-    
-}
-
 // 2. 初始化UART1静态参数
 stUartStaticParamTdf stUart1Static = {
     .pstUartHandle = &huart1,          // HAL初始化的UART句柄
@@ -165,8 +155,7 @@ stUartStaticParamTdf stUart1Static = {
     .ucFrameHeadLen = sizeof(ucFrameHead),
     .pucFrameTail = ucFrameTail,
     .ucFrameTailLen = sizeof(ucFrameTail),
-    .ucFrameEn = emUartFrameOn,                    // 启用帧功能
-    .vCallbackFcn = fun,    // 传入回调函数指针
+    .ucFrameEn = 1,                    // 启用帧功能
     .ulBaudRate = 115200
 };
 vUartDeviceInit(&stUart1Static, emUartDevNum1);
@@ -184,6 +173,22 @@ vUartSendFloat(emUartDevNum1, 6.789f, 2);                    // 发送保留2位
 uint8_t ucFrameData[] = {0x01, 0x02, 0x03};
 vUartSendFrame(emUartDevNum1, ucFrameData, sizeof(ucFrameData));
 
-
+// 6. 主循环中执行周期解析
+while(1)
+{
+    vUartDevicePeriodExecute(emUartDevNum1); // 处理接收/帧解析
+    
+    // 接收帧数据
+    uint8_t ucRecvFrameBuf[64] = {0};
+    uint32_t ulRecvLen = ulUartReceiveFrame(emUartDevNum1, ucRecvFrameBuf);
+    if(ulRecvLen > 0)
+    {
+        // 处理接收到的帧数据
+        vUartPrintf(emUartDevNum1, "Recv Frame: ");
+        vUartSendArray(emUartDevNum1, ucRecvFrameBuf, ulRecvLen);
+    }
+    
+    HAL_Delay(10);
+}
 */
 

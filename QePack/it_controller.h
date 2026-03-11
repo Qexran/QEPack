@@ -11,6 +11,10 @@
 #ifndef _IT_CONTROLLER_H_
 #define _IT_CONTROLLER_H_
 
+#if TIMER_CONTROLLER_IS_ENABLE
+    #include "timer_controller.h"
+#endif
+
 #if ENCODER_IS_ENABLE
     #include "encoder_device.h"
 #endif

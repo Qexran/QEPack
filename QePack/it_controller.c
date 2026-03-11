@@ -18,15 +18,11 @@
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     /* 1ms定时器 */
-    if(htim == &htim1){
-        /* 按键处理 */
-        #if KEY_IS_ENABLE
-            vKeyDevicePeriodExecute(KEY0);
-            
-        #endif
-        
-        vUartDevicePeriodExecute(UART1);
-    }
+    #if TIMER_CONTROLLER_IS_ENABLE
+        if(htim == &TIMER_CONTROLLER_TICK_TIM)
+            vTimerTickHandler();
+    #endif
+    
     
     /* 编码器 */
     #if ENCODER_IS_ENABLE
