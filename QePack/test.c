@@ -14,6 +14,7 @@
 #include "adc_device.h"
 #include "qmc5883_device.h"
 
+// add TI support!
 
 //void vLedInit(){
 //	stLedStaticParamTdf		stStaticInit;
