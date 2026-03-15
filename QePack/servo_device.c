@@ -138,50 +138,50 @@ void vServoSetTargetValue(emServoDevNumTdf emDevNum, float fValue)
     astServoDeviceParam[emDevNum].stRunningParam.fTargetValue = fValue;
 }
 
-/// @brief      舵机周期执行（平滑调速核心）
+/// @brief      舵机周期执行
 /// @param      emDevNum   ：设备号
-/// @note       建议1ms调用一次，仅在平滑模式下生效
 void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
 {
     if(emDevNum >= SERVO_DEV_NUM) return;
     
-    stServoRunningParamTdf *pstRun = &astServoDeviceParam[emDevNum].stRunningParam;
+    stServoRunningParamTdf *pstRunning = &astServoDeviceParam[emDevNum].stRunningParam;
+ 
+    // 仅处理平滑模式
+    if(pstRunning->emMode != emServoMode_Smooth) return;
+
     float fDelta = 0.0f;
     
-    // 仅处理平滑模式
-    if(pstRun->emMode != emServoMode_Smooth) return;
-    
     // 计算当前值与目标值的差值
-    fDelta = pstRun->fTargetValue - pstRun->fCurrentValue;
+    fDelta = pstRunning->fTargetValue - pstRunning->fCurrentValue;
     
     // 差值小于0.1时，认为已到位（避免抖动）
     if(fabs(fDelta) < 0.1f)
     {
-        pstRun->fCurrentValue = pstRun->fTargetValue;
-        vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRun->fCurrentValue));
+        pstRunning->fCurrentValue = pstRunning->fTargetValue;
+        vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
         return;
     }
     
     // 按速度调整当前值（1ms调用一次，速度单位：值/ms）
     if(fDelta > 0)
     {
-        pstRun->fCurrentValue += pstRun->fSpeed;
-        if(pstRun->fCurrentValue > pstRun->fTargetValue)
+        pstRunning->fCurrentValue += pstRunning->fSpeed;
+        if(pstRunning->fCurrentValue > pstRunning->fTargetValue)
         {
-            pstRun->fCurrentValue = pstRun->fTargetValue;
+            pstRunning->fCurrentValue = pstRunning->fTargetValue;
         }
     }
     else
     {
-        pstRun->fCurrentValue -= pstRun->fSpeed;
-        if(pstRun->fCurrentValue < pstRun->fTargetValue)
+        pstRunning->fCurrentValue -= pstRunning->fSpeed;
+        if(pstRunning->fCurrentValue < pstRunning->fTargetValue)
         {
-            pstRun->fCurrentValue = pstRun->fTargetValue;
+            pstRunning->fCurrentValue = pstRunning->fTargetValue;
         }
     }
     
     // 更新PWM输出
-    vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRun->fCurrentValue));
+    vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
 }
 
 /// @brief      180°角度型舵机默认参数初始化（简化版）

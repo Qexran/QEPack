@@ -96,13 +96,13 @@ void vServoSetValue(emServoDevNumTdf emDevNum, float fValue);
 // 180°舵机：fValue=角度(°)；360°舵机：fValue=速度(-100~100)
 void vServoSetTargetValue(emServoDevNumTdf emDevNum, float fValue);
 
-// 舵机平滑模式周期执行函数（仅平滑模式使用，建议1ms调用一次）
+// 舵机平滑模式周期执行函数
 void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 
-// 180°角度型舵机默认参数初始化（简化版）
+// 180°角度型舵机默认参数初始化（极速版）
 void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
 
-// 360°旋转型舵机默认参数初始化（简化版）
+// 360°旋转型舵机默认参数初始化（极速版）
 void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
 
 
@@ -148,16 +148,16 @@ void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *p
 	1.4 参考自定义参数初始化示例
 	void ServoDeviceConfig(void)
 	{
-		stServoStaticParamTdf stServo0Static = {
-			.pstTimHandle = &htim2,
-			.ulChannel = TIM_CHANNEL_2,
-			.fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
-			.fAngleMin = SERVO_DEFAULT_ANGLE_MIN,
-			.fAngleMax = SERVO_DEFAULT_ANGLE_MAX,
-			.fPulseMin = SERVO_DEFAULT_PULSE_MIN,
-			.fPulseMax = SERVO_DEFAULT_PULSE_MAX,
-		};
-
+		stServoStaticParamTdf stServo0Static;
+		stServo0Static.pstTimHandle = &htim2;
+		stServo0Static.ulChannel = TIM_CHANNEL_2;
+		stServo0Static.fPwmFreq = 50.0f;
+		stServo0Static.emType = emServoType_Angle;
+		stServo0Static.fValueMin = 0.0f;
+		stServo0Static.fValueMax = 180.0f;
+		stServo0Static.fPulseMin = 500.0f;
+		stServo0Static.fPulseMid = 1500.0f;
+		stServo0Static.fPulseMax = 2500.0f;
 		
 		// 初始化舵机0
 		vServoDeviceInit(&stServo0Static, SERVO0);
@@ -174,14 +174,14 @@ void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *p
 		while(1)
 		{
 			// 示例1：静态模式直接设角度
-			vServoSetAngle(SERVO0, 45.0f);
+			vServoSetValue(SERVO0, 45.0f);
 			HAL_Delay(1000);
-			vServoSetAngle(SERVO0, 135.0f);
+			vServoSetValue(SERVO0, 135.0f);
 			HAL_Delay(1000);
 			
 			// 示例2：平滑模式调速（需确保1ms调用一次vServoDevicePeriodExecute）
 			vServoSetMode(SERVO0, emServoMode_Smooth);
-			vServoSetTargetVngle(SERVO0, 0.0f);
+			vServoSetTargetValue(SERVO0, 0.0f);
 			for(int i=0; i<1000; i++) // 模拟1ms循环
 			{
 				vServoDevicePeriodExecute(SERVO0);

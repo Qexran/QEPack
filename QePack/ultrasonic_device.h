@@ -94,7 +94,7 @@ void vUltrasonicStartMeasure(emUltrasonicDevNumTdf emDevNum); // 启动单次测
 float fUltrasonicGetDistance(emUltrasonicDevNumTdf emDevNum); // 获取测量距离
 uint8_t ucUltrasonicIsMeasureSuccess(emUltrasonicDevNumTdf emDevNum); // 获取测量结果状态
 
-/* 周期执行函数（需放在while循环中） */
+/* 周期执行函数 */
 void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum);
 
 /* 初始化函数 */
@@ -152,7 +152,7 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
 		// 1. 启动超声波测量
 		vUltrasonicStartMeasure(emUltrasonicDevNum0);
 		
-		// 2. 周期执行测量逻辑（核心）
+		// 2. 周期执行测量逻辑
 		vUltrasonicDevicePeriodExecute(emUltrasonicDevNum0);
 		
 		// 3. 处理测量结果

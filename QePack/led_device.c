@@ -190,6 +190,8 @@ void vLedDeviceBreathExecute(emLedDevNumTdf emDevNum)
  */
 void vLedDevicePeriodExecute(emLedDevNumTdf emDevNum)
 {
+    if(emDevNum >= LED_DEV_NUM) return;
+
     switch(astLedDeviceParam[emDevNum].stRunningParam.emMode)
     {
         case emLedMode_Blink:
@@ -204,7 +206,7 @@ void vLedDevicePeriodExecute(emLedDevNumTdf emDevNum)
         }
         default:
         {
-            ;
+            return;
         }
     }
 }

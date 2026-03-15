@@ -137,7 +137,7 @@ void vUartRegisterCallback(vUartFrameCallback vCallbackFcn);
 
 uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum);
 
-/* 周期执行（建议放在主循环/定时器中断） */
+/* 周期执行 */
 void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum);
 
 #endif
@@ -149,45 +149,36 @@ uint8_t ucFrameHead[] = {0xAA, 0x55};
 uint8_t ucFrameTail[] = {0x0D, 0x0A};
 
 // 2. 初始化UART1静态参数
-stUartStaticParamTdf stUart1Static = {
-    .pstUartHandle = &huart1,          // HAL初始化的UART句柄
-    .pucFrameHead = ucFrameHead,
-    .ucFrameHeadLen = sizeof(ucFrameHead),
-    .pucFrameTail = ucFrameTail,
-    .ucFrameTailLen = sizeof(ucFrameTail),
-    .ucFrameEn = 1,                    // 启用帧功能
-    .ulBaudRate = 115200
-};
-vUartDeviceInit(&stUart1Static, emUartDevNum1);
+stUartStaticParamTdf stUart1Static;
+stUart1Static.pstUartHandle = &huart1;
+stUart1Static.pucFrameHead = ucFrameHead;
+stUart1Static.ucFrameHeadLen = sizeof(ucFrameHead);
+stUart1Static.pucFrameTail = ucFrameTail;
+stUart1Static.ucFrameTailLen = sizeof(ucFrameTail);
+stUart1Static.emFrameEn = emUartFrameOn;
+stUart1Static.ulBaudRate = 115200;
+stUart1Static.vCallbackFcn = NULL;
+vUartDeviceInit(&stUart1Static, UART1);
 
 // 3. 基础发送
-vUartSendByte(emUartDevNum1, 0x31);                          // 发送单个字节
-vUartSendArray(emUartDevNum1, (uint8_t*)"Hello", 5);         // 发送数组
+vUartSendByte(UART1, 0x31);                          // 发送单个字节
+vUartSendArray(UART1, (uint8_t*)"Hello", 5);         // 发送数组
 
 // 4. 格式化发送
-vUartPrintf(emUartDevNum1, "UART Test: %s\r\n", "OK");       // 格式化字符串
-vUartSendInt(emUartDevNum1, 255, 16);                        // 发送16进制整数
-vUartSendFloat(emUartDevNum1, 6.789f, 2);                    // 发送保留2位小数的浮点数
+vUartPrintf(UART1, "UART Test: %s\r\n", "OK");       // 格式化字符串
+vUartSendInt(UART1, 255, 16);                        // 发送16进制整数
+vUartSendFloat(UART1, 6.789f, 2);                    // 发送保留2位小数的浮点数
 
 // 5. 帧发送
 uint8_t ucFrameData[] = {0x01, 0x02, 0x03};
-vUartSendFrame(emUartDevNum1, ucFrameData, sizeof(ucFrameData));
+vUartSendFrame(UART1, ucFrameData, sizeof(ucFrameData));
 
 // 6. 主循环中执行周期解析
 while(1)
 {
-    vUartDevicePeriodExecute(emUartDevNum1); // 处理接收/帧解析
+    vUartDevicePeriodExecute(UART1); // 处理接收/帧解析
     
-    // 接收帧数据
-    uint8_t ucRecvFrameBuf[64] = {0};
-    uint32_t ulRecvLen = ulUartReceiveFrame(emUartDevNum1, ucRecvFrameBuf);
-    if(ulRecvLen > 0)
-    {
-        // 处理接收到的帧数据
-        vUartPrintf(emUartDevNum1, "Recv Frame: ");
-        vUartSendArray(emUartDevNum1, ucRecvFrameBuf, ulRecvLen);
-    }
-    
+    // 检测是否有接收到的帧数据（通过回调函数处理）
     HAL_Delay(10);
 }
 */

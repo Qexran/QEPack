@@ -133,7 +133,7 @@ void vTimerSetCallback(emTimerDevNumTdf emDevNum, vTimerCallback callback)
 }
 
 /**
- * @brief       定时器周期处理（需在1ms定时器中断中调用）
+ * @brief       定时器周期处理
  * @param       无
  */
 void vTimerTickHandler(void)

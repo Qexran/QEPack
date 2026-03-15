@@ -122,21 +122,21 @@ void vKeyClearEvent(emKeyDevNumTdf emDevNum);           // 清除按键事件
 // 按键静态参数初始化
 void vKeyConfigInit(void)
 {
-    stKeyStaticParamTdf stKey0Init = {
-        .pstGpioBase = GPIOB,
-        .usGpioPin = GPIO_PIN_0,
-        .emValidLevel = emKeyValidLevel_Low,
-        .ulDebounceThreshold = 20,        // 20ms消抖
-        .ulLongPressThreshold = 1000,     // 1s长按
-        .ulDoubleClickThreshold = 300     // 300ms双击间隔
-    };
+    stKeyStaticParamTdf stKey0Init;
+    stKey0Init.pstGpioBase = GPIOB;
+    stKey0Init.usGpioPin = GPIO_PIN_0;
+    stKey0Init.emValidLevel = emKeyValidLevel_Low;
+    stKey0Init.ulDebounceThreshold = 20;        // 20ms消抖
+    stKey0Init.ulLongPressThreshold = 1000;     // 1s长按
+    stKey0Init.ulDoubleClickThreshold = 300;     // 300ms双击间隔
     
     // 初始化按键0
-    vKeyDeviceInit(&stKey0Init, emKeyDevNum0);
+    vKeyDeviceInit(&stKey0Init, KEY0);
     
     // 初始化运行参数
-    stKeyRunningParamTdf stKeyRunInit = {0};
-    vKeyDeviceRunningParamInit(&stKeyRunInit, emKeyDevNum0);
+    stKeyRunningParamTdf stKeyRunInit;
+    memset(&stKeyRunInit, 0, sizeof(stKeyRunInit));
+    vKeyDeviceRunningParamInit(&stKeyRunInit, KEY0);
 }
 
 int main(void)
@@ -150,10 +150,10 @@ int main(void)
     while (1)
     {
         // 1ms周期执行（需自行配置定时器或延时实现1ms周期）
-        vKeyDevicePeriodExecute(emKeyDevNum0);
+        vKeyDevicePeriodExecute(KEY0);
         
         // 检测按键事件
-        emKeyEventTdf emKeyEvent = emGetKeyEvent(emKeyDevNum0);
+        emKeyEventTdf emKeyEvent = emKeyGetEvent(KEY0);
         if(emKeyEvent != emKeyEvent_None)
         {
             switch(emKeyEvent)
@@ -170,7 +170,7 @@ int main(void)
                 default:
                     break;
             }
-            vClearKeyEvent(emKeyDevNum0); // 清除事件标志
+            vKeyClearEvent(KEY0); // 清除事件标志
         }
         
         HAL_Delay(1); // 模拟1ms周期

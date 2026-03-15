@@ -139,8 +139,6 @@
 #define TIMER_CONTROLLER_NUM                            1                               // 定时器对象数量
 #define TIMER_CONTROLLER_TICK_TIM                       htim1                           // 1ms 定时器句柄
 #define TIMER0                                          emTimerDevNum0
-#define TIMER1                                          emTimerDevNum1
-#define TIMER2                                          emTimerDevNum2
 #endif
 
 

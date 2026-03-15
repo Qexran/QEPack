@@ -118,11 +118,10 @@ uint32_t ulTimerGetRemaining(emTimerDevNumTdf emDevNum);
     }
 
     // 配置静态参数
-    stTimerStaticParamTdf stTimer0Static = {
-        .ulPeriod = 1000,               // 1000ms 周期
-        .emMode = emTimerMode_Periodic,  // 周期模式
-        .vCallbackFcn = vTimer0Callback   // 回调函数
-    };
+    stTimerStaticParamTdf stTimer0Static;
+    stTimer0Static.ulPeriod = 1000;               // 1000ms 周期
+    stTimer0Static.emMode = emTimerMode_Periodic;  // 周期模式
+    stTimer0Static.vCallbackFcn = vTimer0Callback;   // 回调函数
 
     // 初始化定时器对象
     vTimerDeviceInit(&stTimer0Static, TIMER0); 
@@ -151,4 +150,11 @@ uint32_t ulTimerGetRemaining(emTimerDevNumTdf emDevNum);
     // 查询状态
     uint8_t enabled = ucTimerIsEnabled(TIMER0);
     uint32_t remaining = ulTimerGetRemaining(TIMER0);
+    
+    // 1ms 定时器中断回调中必须调用
+    void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+        if (htim == &TIMER_CONTROLLER_TICK_TIM) {
+            vTimerTickHandler();
+        }
+    }
 */
