@@ -12,7 +12,9 @@
 #ifndef _UART_DEVICE_H_
 #define _UART_DEVICE_H_
 
-#include "usart.h"
+#if (QEPACK_PLATFORM == ST) 
+    #include "usart.h"
+#endif
 #include "stdarg.h"
 #include "string.h"
 #include "stdio.h"

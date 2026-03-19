@@ -63,8 +63,13 @@ emKeyEventTdf;
 /// @note           
 typedef struct
 {
-    GPIO_TypeDef        *pstGpioBase;           // 使用的 GPIOx
-    uint16_t            usGpioPin;              // 使用的 GPIO_PIN_x
+    #if (QEPACK_PLATFORM == TI) 
+        GPIO_Regs       *pstGpioBase;           // 使用的 GPIOx
+        uint32_t        usGpioPin;              // 使用的 GPIO_PIN_x
+    #else
+        GPIO_TypeDef    *pstGpioBase;           // 使用的 GPIOx
+        uint16_t        usGpioPin;              // 使用的 GPIO_PIN_x
+    #endif
     emKeyValidLevelTdf  emValidLevel;           // 按键有效电平
     uint32_t            ulDebounceThreshold;    // 消抖计数阈值（单位：周期，如1ms周期则阈值为20表示20ms消抖）
     uint32_t            ulLongPressThreshold;   // 长按计数阈值（单位：周期）

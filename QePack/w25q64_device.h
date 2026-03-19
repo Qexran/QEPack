@@ -13,8 +13,9 @@
 #define _W25Q64_DEVICE_H_
 
 #include "string.h"
-#include "gpio.h"
-#include "spi.h"
+#if (QEPACK_PLATFORM == ST) 
+    #include "gpio.h"
+#endif
 
 /**
  * @brief          W25Q64 设备号枚举

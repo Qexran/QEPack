@@ -10,20 +10,27 @@
 #ifndef _PROJECT_CONFIG_H_
 #define _PROJECT_CONFIG_H_
 
-/* ########################### System Configuration ######################### */
-
-#include					"stm32f1xx_hal.h"			// 设备头文件
-#include					"stm32f1xx_hal_def.h"	    // 设备定义文件
-#define PI					3.141592653					// PI值
-#define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
-
 #define GPIO                0                           // 占位符
 #define TIM                 1                           // 占位符
+#define TI                  0                           // 占位符
+#define ST                  1                           // 占位符
 
+/* ########################### System Configuration ######################### */
+#define QEPACK_PLATFORM   TI                    // 拓展包使用平台
+
+#if (QEPACK_PLATFORM == ST)
+    #include					"stm32f1xx_hal.h"			    // 设备头文件
+    #include					"stm32f1xx_hal_def.h"	    // 设备定义文件
+#else
+    #include "ti_platform.h"
+#endif
+
+#define PI					3.141592653					// PI值
+#define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
 /* ########################### Device Section ############################### */
 
 /* LED 相关 */
-#define LED_IS_ENABLE									0							// LED 模块开关
+#define LED_IS_ENABLE									1							// LED 模块开关
 #define LED_DEV_NUM                                     1                           // LED 设备数量
 #define LED0                                            emLedDevNum0
 #define LED1                                            emLedDevNum1
@@ -37,14 +44,12 @@
 
 /* KEY 相关 */
 #define KEY_IS_ENABLE									1							// 按键 模块开关
-#define KEY_DEV_NUM   								    3							// 按键 设备数量
+#define KEY_DEV_NUM   								    1							// 按键 设备数量
 #define KEY0                                            emKeyDevNum0
-#define KEY1                                            emKeyDevNum1
-#define KEY2                                            emKeyDevNum2
 
 
 /* UART 相关 */
-#define UART_IS_ENABLE									1							// UART 模块开关
+#define UART_IS_ENABLE									0							// UART 模块开关
 #define UART_DEV_NUM        							2               			// UART 设备数量
 #define UART_BUF_MAX_LEN    							256             			// UART 收发缓存最大长度
 #define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
@@ -127,7 +132,7 @@
 #define EMM_V5_IS_ENABLE                                0                               // EMM_V5 模块总开关
 
 /* W25Q64 Flash 相关 */
-#define W25Q64_IS_ENABLE                                1                               // W25Q64 模块总开关
+#define W25Q64_IS_ENABLE                                0                               // W25Q64 模块总开关
 #define W25Q64_DEV_NUM                                  1                               // W25Q64 设备数量
 #define W25Q64_SECTOR_SIZE                              4096                            // W25Q64 扇区大小（4KB）
 #define W25Q64_PAGE_SIZE                                256                             // W25Q64 页大小（256B）
@@ -137,7 +142,8 @@
 /* Timer Controller 相关 */
 #define TIMER_CONTROLLER_IS_ENABLE                      1                               // Timer Controller 模块总开关
 #define TIMER_CONTROLLER_NUM                            1                               // 定时器对象数量
-#define TIMER_CONTROLLER_TICK_TIM                       htim1                           // 1ms 定时器句柄
+#define ST_TIMER_CONTROLLER_TICK_TIM                    htim1                           // 1ms 定时器句柄(STM)
+/* 若使用TI平台，请在ti_interrupt.c 中传入定时器实例名 */
 #define TIMER0                                          emTimerDevNum0
 #endif
 

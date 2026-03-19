@@ -73,8 +73,13 @@ emLedModeTdf;
  */
 typedef struct
 {
-    GPIO_TypeDef        *pstGpioBase;       // 使用的 GPIOx
-    uint16_t            usGpioPin;          // 使用的 GPIO_PIN_x
+    #if (QEPACK_PLATFORM == TI)                     
+        GPIO_Regs           *pstGpioPort;     // 使用的 GPIOx
+        uint32_t            usGpioPin;          // 使用的 GPIO_PIN_x
+    #else
+        GPIO_TypeDef        *pstGpioBase;
+        uint16_t            usGpioPin;
+    #endif
     emLedOnLevelTdf     emOnLevel;          // LED 点亮时的电平
 }
 stLedStaticParamTdf;

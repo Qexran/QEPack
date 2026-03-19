@@ -1,5 +1,5 @@
 #include "project_config.h"   // 寄存器基地址定义
-#include "Delay.h"
+#include "delay.h"
 
 /* 默认为 72 MHz 系统时钟 */
 #ifndef SYSTEM_CORE_CLOCK

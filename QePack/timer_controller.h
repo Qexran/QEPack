@@ -13,7 +13,9 @@
 #define _TIMER_CONTROLLER_H_
 
 #include "string.h"
-#include "tim.h"
+#if (QEPACK_PLATFORM == ST) 
+    #include "tim.h"
+#endif
 
 /**
  * @brief          定时器对象号枚举

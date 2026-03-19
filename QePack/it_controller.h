@@ -6,10 +6,10 @@
   * @brief      ADC 转换驱动，基于 STM32 HAL 库
   * 
   */
-#include "project_config.h"
-
 #ifndef _IT_CONTROLLER_H_
 #define _IT_CONTROLLER_H_
+
+#include "project_config.h"
 
 #if TIMER_CONTROLLER_IS_ENABLE
     #include "timer_controller.h"
@@ -23,13 +23,15 @@
     #include "key_device.h"
 #endif
 
+#if LED_IS_ENABLE
+    #include "led_device.h"
+#endif
+
+
 #if UART_IS_ENABLE
     #include "uart_device.h"
 #endif
 
-#ifdef HAL_TIM_MODULE_ENABLED
-    #include "tim.h"
-    void TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
-#endif
+void vDevicePeriodExecute();
 
 #endif

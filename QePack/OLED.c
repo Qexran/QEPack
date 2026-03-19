@@ -10,10 +10,13 @@
 #include "OLED.h"
 #if OLED_IS_ENABLE
 
-#define OLED_HARDWARE_I2C_ADDR 0x78
+#if (QEPACK_PLATFORM == ST)
+	#define OLED_HARDWARE_I2C_ADDR 0x78
+#elif (QEPACK_PLATFORM == TI)
+	#define OLED_HARDWARE_I2C_ADDR 0X3C
+#endif
 
 stOledDeviceParamTdf astOledDeviceParam[OLED_DEV_NUM];
-uint8_t auOledSendBuf[2];
 
 /**
   * 数据存储格式：
@@ -200,23 +203,44 @@ void OLED_I2C_SendByte(emOledDevNumTdf emDevNum, uint8_t Byte)
   * 参    数：Command 要写入的命令值，范围：0x00~0xFF
   * 返 回 值：无
   */
-void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
-{
-//	auOledSendBuf[0] = 0x00;
-//	auOledSendBuf[1] = Command;
-	
-	
-	#if OLED_IS_USE_HARDWARE
-		HAL_I2C_Mem_Write(astOledDeviceParam[emDevNum].stStaticParam.hi2c, OLED_HARDWARE_I2C_ADDR, 0x00, 1, &Command, 1, 100);
-	#else
+#if OLED_IS_USE_HARDWARE
+
+	void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
+	{
+		#if (QEPACK_PLATFORM == TI)
+			stOledStaticParamTdf *pstStatic = &astOledDeviceParam[emDevNum].stStaticParam;
+			TI_I2C_Mem_Write(
+				pstStatic->hi2c, 
+				OLED_HARDWARE_I2C_ADDR, 
+				0x00, 
+				&Command, 
+				1, 
+				100
+			);
+		#else
+			HAL_I2C_Mem_Write(
+				pstStatic->stStaticParam.hi2c, 
+				OLED_HARDWARE_I2C_ADDR, 
+				0x00, 
+				1, 
+				&Command, 
+				1, 
+				100
+			);
+		#endif
+	}
+#else
+	void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
+	{
 		OLED_I2C_Start(emDevNum);				//I2C起始
 		OLED_I2C_SendByte(emDevNum, 0x78);		//发送OLED的I2C从机地址
 		OLED_I2C_SendByte(emDevNum, 0x00);		//控制字节，给0x00，表示即将写命令
 		OLED_I2C_SendByte(emDevNum, Command);		//写入指定的命令
 		OLED_I2C_Stop(emDevNum);				//I2C终止
-	#endif
+	}
+#endif
 
-}
+
 
 /**
   * 函    数：OLED写数据
@@ -224,27 +248,36 @@ void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
   * 参    数：Count 要写入数据的数量
   * 返 回 值：无
   */
-void OLED_WriteData(emOledDevNumTdf emDevNum, uint8_t *Data, uint8_t Count)
-{
+#if OLED_IS_USE_HARDWARE
+	void OLED_WriteData(emOledDevNumTdf emDevNum, uint8_t *Data, uint8_t Count)
+	{
+		#if (QEPACK_PLATFORM == TI)
+			// OLED_WR_Byte(Data, 1);
+			TI_I2C_Mem_Write(
+				astOledDeviceParam[emDevNum].stStaticParam.hi2c, 
+				OLED_HARDWARE_I2C_ADDR, 
+				0x40, 
+				Data, 
+				Count, 
+				100
+			);
+		#else
+			HAL_I2C_Mem_Write(
+				astOledDeviceParam[emDevNum].stStaticParam.hi2c, 
+				OLED_HARDWARE_I2C_ADDR, 
+				0x40, 
+				1, 
+				Data, 
+				Count, 
+				100
+			);
+		#endif
 
-	
-	#if OLED_IS_USE_HARDWARE
-	
-		HAL_I2C_Mem_Write(astOledDeviceParam[emDevNum].stStaticParam.hi2c, OLED_HARDWARE_I2C_ADDR, 0x40, 1, Data, Count, 100);
+	}
 
-//		tx_buf[0] = 0x40; // 控制字节：写数据
-//		memcpy(&tx_buf[1], Data, Count); // 复制有效数据到缓冲区
-//	
-//		HAL_I2C_Master_Transmit(
-//            astOledDeviceParam[emDevNum].stStaticParam.hi2c,
-//            0X7A << 1,
-//            tx_buf,
-//            Count + 1, // 总字节数：控制字节+数据字节数
-//            5000 // 超时时间适当延长（数据量可能较大）
-//        );
-//	
-//		free(tx_buf);	//释放临时缓冲区
-	#else
+#else
+	void OLED_WriteData(emOledDevNumTdf emDevNum, uint8_t *Data, uint8_t Count)
+	{
 		uint8_t i;
 		OLED_I2C_Start(emDevNum);				//I2C起始
 		OLED_I2C_SendByte(emDevNum, 0x78);		//发送OLED的I2C从机地址
@@ -255,9 +288,9 @@ void OLED_WriteData(emOledDevNumTdf emDevNum, uint8_t *Data, uint8_t Count)
 			OLED_I2C_SendByte(emDevNum, Data[i]);	//依次发送Data的每一个数据
 		}
 		OLED_I2C_Stop(emDevNum);				//I2C终止
-	#endif
-	
-}
+	}
+
+#endif
 
 
 /// @brief      OLED 设备初始化
@@ -268,6 +301,9 @@ void OLED_WriteData(emOledDevNumTdf emDevNum, uint8_t *Data, uint8_t Count)
 /// @note
 void vOledDeviceInit(stOledStaticParamTdf *pstInit, emOledDevNumTdf emDevNum)
 {
+	#if (QEPACK_PLATFORM == TI)
+		if(!ucGetSysTickInitialState()) SysTick_Init();
+	#endif
 	
 	// 1. 初始化静态参数
     memcpy(&astOledDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stOledStaticParamTdf));
@@ -501,9 +537,9 @@ void vOledUpdateAll()
         emOledDevNumTdf OledNum = (emOledDevNumTdf)i;
         
         #if OLED_IS_USE_HARDWARE
-            if(astOledDeviceParam[OledNum].stStaticParam.hi2c != NULL){
-                vOledUpdate(OledNum);
-            }
+			if(astOledDeviceParam[OledNum].stStaticParam.hi2c != NULL){
+				vOledUpdate(OledNum);
+			}   
         #else
             if(astOledDeviceParam[OledNum].stStaticParam.pstSdaGpioPort != NULL){
                 vOledUpdate(OledNum);
