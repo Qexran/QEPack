@@ -2,7 +2,7 @@
 
 #if (QEPACK_PLATFORM == TI)
 
-
+#include "ti_msp_dl_config.h"
 
 void TI_Delay(uint32_t ms)
 {

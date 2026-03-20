@@ -16,7 +16,7 @@
 #define ST                  1                           // 占位符
 
 /* ########################### System Configuration ######################### */
-#define QEPACK_PLATFORM   TI                    // 拓展包使用平台
+#define QEPACK_PLATFORM   ST                    // 拓展包使用平台
 
 #if (QEPACK_PLATFORM == ST)
     #include					"stm32f1xx_hal.h"			    // 设备头文件

@@ -124,7 +124,7 @@ void vKeyInit(){
 
 void vCallBackFcn2(emUartDevNumTdf emDevNum, stUartRunningParamTdf* stRunningTdf){
 	// 处理接收到的帧数据
-    vUartPrintf(UART1, "QE_B: RECEIVED!\r\n");
+    vUartPrintf(UART_DEVICE_1, "QE_B: RECEIVED!\r\n");
 	
 }
 
@@ -171,7 +171,7 @@ stUartStaticParamTdf stUartStaticInit;
 	stUartStaticInit.vCallbackFcn	= vCallBackFcn2;
 	
 	// 初始化静态参数
-    vUartDeviceInit(&stUartStaticInit, UART1);
+    vUartDeviceInit(&stUartStaticInit, UART_DEVICE_1);
 //	
 	
 }

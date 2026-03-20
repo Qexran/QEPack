@@ -1,8 +1,6 @@
 #ifndef __TI_PLATFORM__
 #define __TI_PLATFORM__
 
-#include "ti_msp_dl_config.h"
-
 #if (QEPACK_PLATFORM == TI)
 
 #include "ti_clock.h"
