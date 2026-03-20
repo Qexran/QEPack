@@ -49,15 +49,15 @@
 
 
 /* UART 相关 */
-#define UART_IS_ENABLE									0							// UART 模块开关
+#define UART_IS_ENABLE									  1							// UART 模块开关
 #define UART_DEV_NUM        							2               			// UART 设备数量
 #define UART_BUF_MAX_LEN    							256             			// UART 收发缓存最大长度
 #define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
 #define UART_TX_QUEUE_MAX_LEN 							256  						// UART 发送队列最大长度，可根据需求调整
 #define UART_TX_BUF_MAX_LEN 							512   						// UART vUartPrintf格式化缓冲区长度
-#define UART_IS_USE_DMA		  							1             				// UART 是否使用DMA传输（正常模式）
-#define UART0                                           emUartDevNum0
-#define UART1                                           emUartDevNum1
+#define UART_IS_USE_DMA		  							0             				// UART 是否使用DMA传输（正常模式）
+#define UART_DEVICE_0                                           emUartDevNum0
+#define UART_DEVICE_1                                           emUartDevNum1
 
 
 /* OLED 相关 */
@@ -103,7 +103,7 @@
 #define ADC_0                                           emAdcDevNum0
 
 /* 编码器 相关 */
-#define ENCODER_IS_ENABLE                               0                               // 编码器 模块总开关
+#define ENCODER_IS_ENABLE                               1                               // 编码器 模块总开关
 #define ENCODER_HANDLE_FREQ                             50                              // 编码器处理数据的时间 (ms)
                             /* tips:对于GPIO模式，应一引脚设置外部中断，一引脚设置输入模式 */
 #define ENCODER_HANDLE_PLAN                             TIM                             // 编码器处理方案 (TIM/GPIO)

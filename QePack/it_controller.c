@@ -95,29 +95,29 @@ void vDevicePeriodExecute(){
     #endif
     /* UART */
     #if UART_IS_ENABLE
-        #ifdef UART0 
-            vUartDevicePeriodExecute(UART0); 
+        #ifdef UART_DEVICE_0 
+            vUartDevicePeriodExecute(UART_DEVICE_0); 
         #endif
-        #ifdef UART1 
-            vUartDevicePeriodExecute(UART1); 
+        #ifdef UART_DEVICE_1 
+            vUartDevicePeriodExecute(UART_DEVICE_1); 
         #endif
-        #ifdef UART2 
-            vUartDevicePeriodExecute(UART2); 
+        #ifdef UART_DEVICE_2 
+            vUartDevicePeriodExecute(UART_DEVICE_2); 
         #endif
-        #ifdef UART3 
-            vUartDevicePeriodExecute(UART3); 
+        #ifdef UART_DEVICE_3 
+            vUartDevicePeriodExecute(UART_DEVICE_3); 
         #endif
-        #ifdef UART4 
-            vUartDevicePeriodExecute(UART4); 
+        #ifdef UART_DEVICE_4 
+            vUartDevicePeriodExecute(UART_DEVICE_4); 
         #endif
-        #ifdef UART5 
-            vUartDevicePeriodExecute(UART5); 
+        #ifdef UART_DEVICE_5 
+            vUartDevicePeriodExecute(UART_DEVICE_5); 
         #endif
-        #ifdef UART6 
-            vUartDevicePeriodExecute(UART6); 
+        #ifdef UART_DEVICE_6 
+            vUartDevicePeriodExecute(UART_DEVICE_6); 
         #endif
-        #ifdef UART7 
-            vUartDevicePeriodExecute(UART7); 
+        #ifdef UART_DEVICE_7 
+            vUartDevicePeriodExecute(UART_DEVICE_7); 
         #endif
     #endif
     /* ULTRASONIC */

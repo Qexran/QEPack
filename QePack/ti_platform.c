@@ -2,6 +2,8 @@
 
 #if (QEPACK_PLATFORM == TI)
 
+
+
 void TI_Delay(uint32_t ms)
 {
     mspm0_delay_ms(ms);
@@ -149,6 +151,51 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
         DL_GPIO_clearPins(GPIOx, GPIO_Pin);
     }
 }
+
+/**
+    函数原型:
+    HAL_StatusTypeDef HAL_UART_Transmit(
+            UART_HandleTypeDef *huart, const uint8_t *pData, 
+            uint16_t Size, uint32_t Timeout)
+*/
+void TI_UART_Transmit(
+    stUartTdf *uart_inst, const uint8_t *pData, 
+    uint16_t Size, uint32_t Timeout
+){
+    unsigned long start, cur;
+    bool txSuccess = false; // 用于存储 Check 函数的返回结果
+    
+    for (uint16_t i = 0; i < Size; i++) {
+        mspm0_get_clock_ms(&start);
+        txSuccess = false; // 重置标志
+        
+        // 尝试写入
+        while (!txSuccess) {
+            // 尝试写入数据
+            // 如果 FIFO 有空位：写入成功，返回 true
+            // 如果 FIFO 已满：不写入，返回 false
+            txSuccess = DL_UART_transmitDataCheck(uart_inst->uart_inst, pData[i]); 
+            
+            if (!txSuccess) {
+                // 如果写入失败（因为忙），检查是否超时
+                mspm0_get_clock_ms(&cur);
+
+                if ((cur - start) >= Timeout) {
+                    // === 超时处理 ===
+                    // 可以选择返回错误码，或者 break 跳出循环
+                    return; 
+                }
+                
+                // 可选：稍微延时一点点，避免死循环占用 100% CPU (视系统需求而定)
+                // __asm(" NOP "); 
+            }
+        }
+        // 如果 txSuccess 为 true，说明数据已写入，继续循环发送下一个字节
+    }
+}
+
+
+
 
 
 

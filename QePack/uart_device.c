@@ -78,11 +78,16 @@ void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
 //			UART_IT_IDLE
 //		);
 	#else
-		HAL_UART_Receive_IT(
-			pstInit->pstUartHandle, 
-			&pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head],
-			1
-		);
+        #if (QEPACK_PLATFORM == TI)
+            NVIC_ClearPendingIRQ(pstStatic->pstUartHandle->int_irqn); // 清除 UART 中断挂起标志
+            NVIC_EnableIRQ(pstStatic->pstUartHandle->int_irqn);       // 使能 UART 中断
+        #else
+            HAL_UART_Receive_IT(
+                pstInit->pstUartHandle, 
+                &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head],
+                1
+            );
+        #endif
 	#endif
     
 	// 注册回调函数
@@ -196,13 +201,23 @@ void vUartSendArray(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
             }
         }
     #else
-        // 非DMA模式，保留原有逻辑不变
-        HAL_UART_Transmit(
-            pstDev->stStaticParam.pstUartHandle, 
-            pucData, 
-            ulLen, 
-            HAL_MAX_DELAY
-        );
+        #if (QEPACK_PLATFORM == TI)
+            TI_UART_Transmit(
+                pstDev->stStaticParam.pstUartHandle, 
+                pucData, 
+                ulLen, 
+                TI_MAX_DELAY
+            );
+        #else
+            // 非DMA模式，保留原有逻辑不变
+            HAL_UART_Transmit(
+                pstDev->stStaticParam.pstUartHandle, 
+                pucData, 
+                ulLen, 
+                HAL_MAX_DELAY
+            );
+        #endif 
+        
         pstDev->stRunningParam.ulTxCount += ulLen;
     #endif
 }
@@ -232,6 +247,8 @@ uint8_t ucUartReceiveByte(emUartDevNumTdf emDevNum)
     return data;
 }
 
+/** 这个函数不常使用，暂不移植. */
+#if (QEPACK_PLATFORM == ST)
 /// @brief      接收字节数组
 /// @param      emDevNum   ：设备号
 /// @param      pucBuf     ：接收缓存指针
@@ -255,6 +272,7 @@ uint32_t ulUartReceiveArray(emUartDevNumTdf emDevNum, uint8_t *pucBuf, uint32_t 
     
     return ulRecvLen;
 }
+#endif
 
 /// @brief      格式化发送
 /// @param      emDevNum   ：设备号
@@ -666,7 +684,7 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
         else
         {
             pstRunning->aucRxBuf[0] = ucData; // 存入当前索引
-            //pstRunning->ulRxCount++; // 计数后增
+            //pstRunning->ulRxCount++; // 计数后增 [此时不应计算个数，立即进入中断]
             pstRunning->ucRxComplete = 1; // 标记有数据接收
 
         }
@@ -685,30 +703,43 @@ uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum)
 void vUartUpdateBuffer(emUartDevNumTdf emDevNum){
 	stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 	stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
+
+    #if (QEPACK_PLATFORM == TI)
+       pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head] = 
+       DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
+    #endif
 	
 	// 更新环形缓冲区指针
 	if (pstRunning->stUartTempBuffer.count < UART_BUF_MAX_LEN) {
 		pstRunning->stUartTempBuffer.head = (pstRunning->stUartTempBuffer.head + 1) % UART_BUF_MAX_LEN;
 		pstRunning->stUartTempBuffer.count++;
 	}
+
+    #if (QEPACK_PLATFORM == ST)
+        // 继续接收下一个字节
+        HAL_UART_Receive_IT(pstStatic->pstUartHandle, &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head], 1);
+    #endif
+}
+
+#if (QEPACK_PLATFORM == TI)
+    void vUartRxCallBackHandler(emUartDevNumTdf emDevNum){
+        vUartUpdateBuffer(emDevNum);
         
-    // 继续接收下一个字节
-    HAL_UART_Receive_IT(pstStatic->pstUartHandle, &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head], 1);
-}
-
-emUartDevNumTdf vUartRxCallBackHandler(UART_HandleTypeDef *huart){
-	/* 查阅可用的UART句柄并更新 */
-	uint8_t i = emUartDevNum0;
-	for(;i < UART_DEV_NUM; i++){
-		if(huart == astUartDeviceParam[i].stStaticParam.pstUartHandle){
-			vUartUpdateBuffer((emUartDevNumTdf)i);
-			/* 优化: 匹配到后立即返回 */
-			break;
-		}
-	}
-	return (emUartDevNumTdf)i;
-}
-
+    }
+#else
+    emUartDevNumTdf vUartRxCallBackHandler(UART_HandleTypeDef *huart){
+        /* 查阅可用的UART句柄并更新 */
+        uint8_t i = emUartDevNum0;
+        for(;i < UART_DEV_NUM; i++){
+            if(huart == astUartDeviceParam[i].stStaticParam.pstUartHandle){
+                vUartUpdateBuffer((emUartDevNumTdf)i);
+                /* 优化: 匹配到后立即返回 */
+                break;
+            }
+        }
+        return (emUartDevNumTdf)i;
+    }
+#endif
 
 #if UART_IS_USE_DMA
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -808,11 +839,12 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 }
 
 #else
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    emUartDevNumTdf emDevNum = vUartRxCallBackHandler(huart);
-}
+    #if (QEPACK_PLATFORM == ST)
+        void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+        {
+            emUartDevNumTdf emDevNum = vUartRxCallBackHandler(huart);
+        }
+    #endif
 
 #endif
 #endif

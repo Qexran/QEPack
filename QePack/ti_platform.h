@@ -7,6 +7,8 @@
 
 #include "ti_clock.h"
 
+#define TI_MAX_DELAY      0xFFFFFFFFU
+
 extern volatile unsigned long tick_ms;
 
 /**
@@ -33,6 +35,10 @@ typedef struct {
     void (*vI2cInitFunc)(void);       // 指向 SYSCFG_DL_I2C_XXX_init 初始化回调函数指针
 } stI2CTdf;
 
+typedef struct {
+    UART_Regs     *uart_inst;          // UART 模块寄存器基地址
+    uint32_t      int_irqn;             // UART 中断向量号
+} stUartTdf;
 
 typedef void (*vI2CInitFunc)(void);
 void SysTick_Init(void);
@@ -43,6 +49,11 @@ void TI_I2C_Mem_Write(
     stI2CTdf *pstIdf,
     uint8_t DevAddress, uint8_t MemAddress,
     uint8_t *pData, uint16_t Size, uint32_t Timeout
+);
+
+void TI_UART_Transmit(
+    stUartTdf *i2c_inst, const uint8_t *pData, 
+    uint16_t Size, uint32_t Timeout
 );
 
 uint8_t TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);

@@ -9,6 +9,10 @@
 
 void Interrupt_Init(void);
 
+#if UART_IS_ENABLE
+    #include "uart_device.h"
+#endif
+
 /**
  * @brief 定时器中断处理函数模板宏
  * @param TIMER_NAME: 定时器实例名
@@ -27,8 +31,25 @@ void Interrupt_Init(void);
                     break;                                        \
                 default:                                          \
                     break;                                        \
-            }                                                                                                   \
+            }                                                                                                    \
         }                                                         
+
+
+/**
+ * @brief UART中断处理函数模板宏
+ * @param UART_NAME: UART实例名
+ */
+#define CREATE_UART_IRQ_HANDLER(UART_NAME, emDevNum)                                    \
+    void UART_NAME##_INST_IRQHandler(void) {                                  \
+        switch (DL_UART_Main_getPendingInterrupt(UART_NAME##_INST)) {         \
+            case DL_UART_MAIN_IIDX_RX:                                        \
+                vUartRxCallBackHandler(emDevNum);                             \
+                break;                                                        \
+            default:                                                          \
+                break;                                                        \
+        }                                                                     \
+    }
+
 
 
 #endif
