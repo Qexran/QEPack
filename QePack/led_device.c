@@ -52,7 +52,11 @@ void vLedUpdatePinLevel(emLedDevNumTdf emDevNum)
     ucOutput = !(astLedDeviceParam[emDevNum].stStaticParam.emOnLevel ^ astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus);
     
     // 2. 更新 LED 输出引脚电平
-    HAL_GPIO_WritePin(astLedDeviceParam[emDevNum].stStaticParam.pstGpioBase, astLedDeviceParam[emDevNum].stStaticParam.usGpioPin, (GPIO_PinState)ucOutput);
+    #if (QEPACK_PLATFORM == TI)
+        TI_GPIO_WritePin(astLedDeviceParam[emDevNum].stStaticParam.pstGpioPort, astLedDeviceParam[emDevNum].stStaticParam.usGpioPin, (GPIO_PinState)ucOutput);
+    #else
+        HAL_GPIO_WritePin(astLedDeviceParam[emDevNum].stStaticParam.pstGpioBase, astLedDeviceParam[emDevNum].stStaticParam.usGpioPin, (GPIO_PinState)ucOutput);
+    #endif
 }
 
 
@@ -148,7 +152,8 @@ void vLedDeviceBilnkExecute(emLedDevNumTdf emDevNum)
  *             
  *             在【当前呼吸计数值】为 3 时，【ON 持续时间（计数阈值）】 = sin(【当前呼吸计数值】 / 【最大计数】 * 3.1415926) * sin(【当前呼吸计数值】 / 【最大计数】 * 3.1415926) * 【闪烁周期】
  *                                                                         = sin(3 / 10 * 3.1415926) * sin(3 / 10 * 3.1415926) * 10
- */                                                                       = 4.999999999999999
+ *                                                                        = 4.999999999999999
+ */
 void vLedDeviceBreathExecute(emLedDevNumTdf emDevNum)
 {
     uint32_t ulBreathCountMax;          // 呼吸计数最大值

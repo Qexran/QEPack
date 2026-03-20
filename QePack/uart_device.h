@@ -12,7 +12,11 @@
 #ifndef _UART_DEVICE_H_
 #define _UART_DEVICE_H_
 
-#include "usart.h"
+#if (QEPACK_PLATFORM == ST) 
+    #include "usart.h"
+#else
+    #include "QEPack.h"
+#endif
 #include "stdarg.h"
 #include "string.h"
 #include "stdio.h"
@@ -92,7 +96,12 @@ typedef void (*vUartFrameCallback)(emUartDevNumTdf emDevNum, stUartRunningParamT
 /// @note           不可运行时修改的参数（硬件相关、帧格式基础配置）
 typedef struct
 {
-    UART_HandleTypeDef   *pstUartHandle;    // UART句柄指针
+    #if (QEPACK_PLATFORM == TI)                 // UART句柄指针
+        stUartTdf            *pstUartHandle;
+    #else
+        UART_HandleTypeDef   *pstUartHandle;
+    #endif
+    
     uint8_t              *pucFrameHead;     // 帧头数组指针
     uint8_t               ucFrameHeadLen;   // 帧头长度
     uint8_t              *pucFrameTail;     // 帧尾数组指针
@@ -139,6 +148,10 @@ uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum);
 
 /* 周期执行 */
 void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum);
+
+#if (QEPACK_PLATFORM == TI)
+    void vUartRxCallBackHandler(emUartDevNumTdf emDevNum);
+#endif
 
 #endif
 #endif

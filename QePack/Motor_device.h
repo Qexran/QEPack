@@ -8,8 +8,10 @@
   */
   
 #include "project_config.h"
-#include "encoder_device.h"
+
 #if MOTOR_IS_ENABLE
+
+#include "encoder_device.h"
 
 #ifndef _MOTOR_DEVICE_H_
 #define _MOTOR_DEVICE_H_

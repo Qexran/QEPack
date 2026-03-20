@@ -1,7 +1,7 @@
 #ifndef __MPU6050_H
 #define __MPU6050_H
 
-#include "main.h"
+#include "project_config.h"
 
 #if MPU6050_IS_ENABLE
 

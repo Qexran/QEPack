@@ -59,16 +59,21 @@ static __INLINE uint8_t ucKeyReadRawState(emKeyDevNumTdf emDevNum)
     uint8_t ucRawLevel;
     
     // 读取GPIO引脚电平
-    ucRawLevel = HAL_GPIO_ReadPin(pstStaticParam->pstGpioBase, pstStaticParam->usGpioPin);
+    #if (QEPACK_PLATFORM == TI) 
+        ucRawLevel = TI_GPIO_ReadPin(pstStaticParam->pstGpioBase, pstStaticParam->usGpioPin);
+    #else
+        ucRawLevel = HAL_GPIO_ReadPin(pstStaticParam->pstGpioBase, pstStaticParam->usGpioPin);
+    #endif
+    
     
     // 根据有效电平判断按键是否按下
     if(pstStaticParam->emValidLevel == emKeyValidLevel_Low)
     {
-        return (ucRawLevel == GPIO_PIN_RESET) ? 1 : 0;
+        return ((uint8_t)ucRawLevel == 0) ? 1 : 0;
     }
     else
     {
-        return (ucRawLevel == GPIO_PIN_SET) ? 1 : 0;
+        return ((uint8_t)ucRawLevel == 1) ? 1 : 0;
     }
 }
 

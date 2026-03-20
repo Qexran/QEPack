@@ -15,7 +15,10 @@
 #define _ENCODER_DEVICE_H_
 
 #include "string.h"
-#include "tim.h"
+
+#if (QEPACK_PLATFORM == ST)
+    #include "tim.h"
+#endif
 
 /** @brief 编码器设备号枚举 */
 typedef enum {
@@ -34,7 +37,7 @@ typedef enum {
 /** @brief 编码器静态参数定义 */
 typedef struct {
     #if ENCODER_HANDLE_PLAN // TIM
-        TIM_HandleTypeDef *pstTimerBase;                // 定时器外设基地址（如TIM2）
+        TIM_HandleTypeDef   *pstTimerBase;              // 定时器外设基地址（如TIM2）
     #else // GPIO
         GPIO_TypeDef        *EXTI_GpioPort;             // Encoder1 GPIO端口
         uint16_t            EXTI_Pin;                   // Encoder1 引脚

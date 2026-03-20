@@ -19,7 +19,13 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "stdlib.h"
-#include "i2c.h"
+
+#if (QEPACK_PLATFORM == ST) 
+    #include "i2c.h"
+#elif (QEPACK_PLATFORM == TI)
+    //#include "ti_platform.h"
+#endif
+
 
 
 /// @brief          设备号枚举
@@ -58,18 +64,37 @@ emOledFontSizeTdf;
 /// @brief          静态参数定义
 ///
 /// @note           
-typedef struct
-{
-    #if !OLED_IS_USE_HARDWARE
-        GPIO_TypeDef        *pstSclGpioPort;     // SCL GPIO端口
-        uint16_t            usSclPin;            // SCL引脚
-        GPIO_TypeDef        *pstSdaGpioPort;     // SDA GPIO端口
-        uint16_t            usSdaPin;            // SDA引脚
-    #else
-        I2C_HandleTypeDef 	*hi2c;			     // I2C句柄(若使用硬件I2C)
-    #endif
-}
-stOledStaticParamTdf;
+#if OLED_IS_USE_HARDWARE
+
+    typedef struct
+    {
+        #if (QEPACK_PLATFORM == TI)                 // I2C句柄(若使用硬件I2C)
+            stI2CTdf        *hi2c;
+        #else
+            I2C_HandleTypeDef 	*hi2c;
+        #endif
+    }
+    stOledStaticParamTdf;
+
+#else
+
+    typedef struct
+    {
+        #if (QEPACK_PLATFORM == TI)
+            GPIO_Regs           *pstSclGpioPort;     // SCL GPIO端口
+            uint32_t            usSclPin;            // SCL引脚
+            GPIO_Regs           *pstSdaGpioPort;     // SDA GPIO端口
+            uint32_t            usSdaPin;            // SDA引脚
+        #else
+            GPIO_TypeDef        *pstSclGpioPort;
+            uint16_t            usSclPin;       
+            GPIO_TypeDef        *pstSdaGpioPort;
+            uint16_t            usSdaPin;       
+        #endif
+    }
+    stOledStaticParamTdf;
+
+#endif
 
 /// @brief          运行参数定义
 ///

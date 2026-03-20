@@ -7,6 +7,7 @@
   */
 
 #include "motor_device.h"
+
 #if MOTOR_IS_ENABLE
 
 stMotorDeviceParamTdf astMotorDeviceParam[MOTOR_DEV_NUM];
