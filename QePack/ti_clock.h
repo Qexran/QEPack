@@ -1,9 +1,11 @@
 #ifndef _TI_CLOCK_H_
 #define _TI_CLOCK_H_
 
-#include "ti_msp_dl_config.h"
+#include "project_config.h"
 
 #if (QEPACK_PLATFORM == TI)
+
+#include "ti_msp_dl_config.h"
 
 extern volatile unsigned long tick_ms;
 

@@ -36,12 +36,23 @@ emMotorDevNumTdf;
  */
 typedef struct
 {
-    TIM_HandleTypeDef *pstPWM_htim;         // 电机PWM使用的定时器
-    uint32_t u32PWM_Channel;                // PWM输出通道
-    GPIO_TypeDef *pstDir1GpioBase;          // 电机控制引脚1对应的GPIOX
-    uint32_t u32DirPin1;                    // 电机方向控制引脚1
-    GPIO_TypeDef *pstDir2GpioBase;          // 电机控制引脚2对应的GPIOX
-    uint32_t u32DirPin2;                    // 电机方向控制引脚2
+    #if (QEPACK_PLATFORM == TI)
+		stTimerTdf 		    *stTimer;         // TIM句柄
+		DL_TIMER_CC_INDEX 	emChannel;          // PWM通道
+        GPIO_Regs           *pstDir1GpioBase;        // 检测编码器方向的 GPIOx
+        uint32_t            u32DirPin1;              // 检测编码器方向的 GPIO_PIN_1
+        GPIO_Regs           *pstDir2GpioBase;        // 检测编码器方向的 GPIOx
+        uint32_t            u32DirPin2;              // 检测编码器方向的 GPIO_PIN_2
+	#else
+   		TIM_HandleTypeDef *pstPWM_htim;         // 电机PWM使用的定时器
+        uint32_t u32PWM_Channel;                // PWM输出通道
+        GPIO_TypeDef *pstDir1GpioBase;          // 电机控制引脚1对应的GPIOX
+        uint32_t u32DirPin1;                    // 电机方向控制引脚1
+        GPIO_TypeDef *pstDir2GpioBase;          // 电机控制引脚2对应的GPIOX
+        uint32_t u32DirPin2;                    // 电机方向控制引脚2
+    #endif
+    
+    
     float Tire_R;						    // 轮胎半径
     emEncoderDevNumTdf emEncoderDevNum;     // 编码器设备号
 }

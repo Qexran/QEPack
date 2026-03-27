@@ -27,9 +27,17 @@
     #include "led_device.h"
 #endif
 
+#if STEP_M_ENABLE
+    #include "step_machine.h"
+#endif
+
 
 #if UART_IS_ENABLE
     #include "uart_device.h"
+#endif
+
+#if SERVO_IS_ENABLE
+    #include "servo_device.h"
 #endif
 
 void vDevicePeriodExecute();

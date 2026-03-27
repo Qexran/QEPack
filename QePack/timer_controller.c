@@ -201,4 +201,20 @@ uint32_t ulTimerGetRemaining(emTimerDevNumTdf emDevNum)
     return pstDev->stStaticParam.ulPeriod - pstDev->stRunningParam.ulCounter;
 }
 
+#if (QEPACK_PLATFORM == TI)
+    /** 
+        gptimer 为 XXX_INST
+        IRQn    为 XXX_INST_INT_IRQN
+        一般采用DL_TIMER_IIDX_ZERO作为interruptMask的值 
+    */
+    void v1MSTimerBaseInit(GPTIMER_Regs *gptimer, DL_TIMER_IIDX interruptMask, IRQn_Type IRQn){
+        DL_TimerA_enableInterrupt(gptimer, interruptMask);
+        NVIC_EnableIRQ(IRQn);
+    }
+#else
+    void v1MSTimerBaseInit(TIM_HandleTypeDef *htim){
+        HAL_TIM_Base_Start_IT(&htim);
+    }
+#endif
+
 #endif

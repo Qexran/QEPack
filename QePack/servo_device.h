@@ -14,7 +14,12 @@
 
 #include "string.h"
 #include "math.h"
-#include "stm32f1xx_hal.h"
+
+#if (QEPACK_PLATFORM == TI)
+	
+#else
+	#include "stm32f1xx_hal.h"
+#endif
 
 /// @brief          舵机设备号枚举
 /// @note           与 SERVO_DEV_NUM 匹配，可扩展至更多设备
@@ -48,8 +53,14 @@ typedef enum
 /// @note           包含PWM通道、硬件参数、角度/速度-脉冲映射关系
 typedef struct
 {
-    TIM_HandleTypeDef   *pstTimHandle;       // TIM句柄（如&htim1）
-    uint32_t            ulChannel;           // PWM通道（如TIM_CHANNEL_2）
+	#if (QEPACK_PLATFORM == TI)				// TIM句柄
+		stTimerTdf 			*stTimer;
+		DL_TIMER_CC_INDEX 	emChannel;           // PWM通道（如TIM_CHANNEL_2）
+	#else
+   		TIM_HandleTypeDef   *pstTimHandle;
+		uint32_t            ulChannel;           // PWM通道（如TIM_CHANNEL_2）
+    #endif
+
     float               fPwmFreq;            // PWM频率(Hz)
     emServoTypeTdf      emType;              // 舵机类型（180°/360°）
     float               fValueMin;           // 最小可控值（180°=角度，360°=速度）
@@ -99,12 +110,20 @@ void vServoSetTargetValue(emServoDevNumTdf emDevNum, float fValue);
 // 舵机平滑模式周期执行函数
 void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 
-// 180°角度型舵机默认参数初始化（极速版）
-void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+#if (QEPACK_PLATFORM == TI)
+	// 180°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
 
-// 360°旋转型舵机默认参数初始化（极速版）
-void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+	// 360°旋转型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
 
+#else
+	// 180°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+
+	// 360°旋转型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+#endif
 
 #endif /* _SERVO_DEVICE_H_ */
 #endif /* SERVO_IS_ENABLE */

@@ -1,11 +1,11 @@
 #ifndef __TI_PLATFORM__
 #define __TI_PLATFORM__
 
-#include "ti_msp_dl_config.h"
+#include "ti_clock.h"
 
 #if (QEPACK_PLATFORM == TI)
 
-#include "ti_clock.h"
+#include "ti_msp_dl_config.h"
 
 #define TI_MAX_DELAY      0xFFFFFFFFU
 
@@ -40,10 +40,17 @@ typedef struct {
     uint32_t      int_irqn;             // UART 中断向量号
 } stUartTdf;
 
+typedef struct {    /** 注意：若config里没有对应的变量，则不填写该字段 */
+    GPTIMER_Regs    *timer_inst;          // 定时器寄存器基地址
+    uint32_t        clk_freq;             // 定时器时钟频率（Hz）
+    IRQn_Type       timer_irqn;           // 定时器中断向量号
+} stTimerTdf;
+
 typedef void (*vI2CInitFunc)(void);
 void SysTick_Init(void);
 void TI_Delay(uint32_t ms);
 
+uint32_t TI_GetTick(void);
 
 void TI_I2C_Mem_Write(
     stI2CTdf *pstIdf,
@@ -56,7 +63,7 @@ void TI_UART_Transmit(
     uint16_t Size, uint32_t Timeout
 );
 
-uint8_t TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);
+GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);
 
 void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinState);
 #endif

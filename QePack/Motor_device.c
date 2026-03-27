@@ -33,15 +33,20 @@ void vMotorDeviceInit(stMotorStaticParamTdf *pstInit, emMotorDevNumTdf emDevNum)
     
 
     // 启动电机定时器
-    if (
-        HAL_TIM_PWM_Start(
-            astMotorDeviceParam[emDevNum].stStaticParam.pstPWM_htim, 
-            pstInit->u32PWM_Channel
-        ) 
-        != HAL_OK) {
-        while(1);
-    }
-
+    #if (QEPACK_PLATFORM == TI)
+        DL_Timer_startCounter(
+            astMotorDeviceParam[emDevNum].stStaticParam.stTimer->timer_inst
+        );
+    #else
+        if (
+            HAL_TIM_PWM_Start(
+                astMotorDeviceParam[emDevNum].stStaticParam.pstPWM_htim, 
+                pstInit->u32PWM_Channel
+            ) 
+            != HAL_OK) {
+            while(1);
+        }
+    #endif
 }
 
 /**
@@ -60,16 +65,39 @@ void vMotorSetSpeed_by_PWM(emMotorDevNumTdf emDevNum, int16_t speed)
     uint16_t absSpeed = (speed < 0) ? -speed : speed;
     
     // 控制电机方向
-    if (speed >= 0) {
-        HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
-    } else {
-        HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_SET);
-    }
+    #if (QEPACK_PLATFORM == TI)
+        if (speed > 0) {
+            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_SET);
+            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
+        } else {
+            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
+            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_SET);
+        }
+
+        if(speed == 0){
+            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
+            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
+        }
+    #else
+        if (speed >= 0) {
+            HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
+        } else {
+            HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_SET);
+        }
+    #endif
 
     // 修改PWM占空比
-    __HAL_TIM_SET_COMPARE(pstStatic->pstPWM_htim, pstStatic->u32PWM_Channel, absSpeed); 
+    #if (QEPACK_PLATFORM == TI)
+        DL_Timer_setCaptureCompareValue(
+            pstStatic->stTimer->timer_inst, 
+            absSpeed, 
+            pstStatic->emChannel
+        );
+    #else
+        __HAL_TIM_SET_COMPARE(pstStatic->pstPWM_htim, pstStatic->u32PWM_Channel, absSpeed); 
+    #endif
 }
 
 #endif

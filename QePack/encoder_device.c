@@ -62,17 +62,35 @@ float fMedianFilter(float fValue, float* afBuffer, uint8_t u8BufferSize)
 static int32_t lEncoderGetEncoder(emEncoderDevNumTdf emDevNum)
 {
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
+    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
     
-    #if ENCODER_HANDLE_PLAN // TIM
-    
-        stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
-    
+    #if (ENCODER_HANDLE_PLAN == TIM) // TIM
         return ( int32_t )
             __HAL_TIM_GET_COUNTER(
                 pstStatic->pstTimerBase
-            ) + pstRunning->times_reach_arr * (pstStatic->pstTimerBase->Init.Period + 1);
+            ) + pstRunning->times_reach * (pstStatic->pstTimerBase->Init.Period + 1);
     #else
-        return pstRunning->TotalPosition;
+
+        #if (QEPACK_PLATFORM == TI)
+            if (pstStatic->ucNumberofEdgesToDetect > 1 && pstRunning->isDoneAInterrupt) {
+                pstRunning->isDoneAInterrupt = 0;
+                
+                pstRunning->TotalPosition +=
+                pstRunning->direction_map[pstRunning->emCurrentPinState] 
+                * pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR;
+
+                pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR = 0;
+            }
+            return pstRunning->TotalPosition;
+        #else
+            /*
+                为什么直接返回TotalPosition？
+                因为TotalPosition的更新由每次的比较定时器更新中断/GPIO外部中断处理
+            */
+            return pstRunning->TotalPosition;
+        #endif
+
+        
     #endif
 }
 
@@ -108,16 +126,46 @@ void vEncoderDeviceInit(stEncoderStaticParamTdf *pstInit, emEncoderDevNumTdf emD
 //    for (int i = 0; i < 5; i++) {
 //        astEncoderDeviceParam[emDevNum].stRunningParam.afFilterBuffer[i] = 0.0f;
 //    }
+
+    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
     
-    #if ENCODER_HANDLE_PLAN // TIM
+
+    /** 与编码器直接对应的定时器 */
+    #if (ENCODER_HANDLE_PLAN == TIM) // TIM
         // 启动编码器定时器
-        if (HAL_TIM_Encoder_Start_IT(astEncoderDeviceParam[emDevNum].stStaticParam.pstTimerBase, TIM_CHANNEL_ALL) != HAL_OK) {
+        if (HAL_TIM_Encoder_Start_IT(pstStatic->pstTimerBase, TIM_CHANNEL_ALL) != HAL_OK) {
             while(1);
         }
+
+    #else
+        #if (QEPACK_PLATFORM == TI)
+            //使能比较中断
+            NVIC_EnableIRQ(pstStatic->pstCompareTimerBase->timer_irqn);
+            //编码定时器
+            //墙裂建议配置在PWM输出前面
+            DL_Timer_startCounter(pstStatic->pstCompareTimerBase->timer_inst);
+        #endif
     #endif
     
-    // 启动编码器绑定的定时器
-    HAL_TIM_Base_Start_IT(&ENCODER_COMPUTE_IT_TIM);
+
+    /** 用来处理数据的定时器 */
+
+    // 是否使用寄生定时器
+    #if ENCODER_IS_USE_PARASITISM
+        // TODO
+    #else
+        // 启动编码器绑定的定时器
+        #if (QEPACK_PLATFORM == TI)
+            // 若不使用寄生定时器，则需要手动创建回调函数
+            DL_Timer_enableInterrupt(
+                pstStatic->pstHandleTimerBase->timer_inst, 
+                DL_TIMER_IIDX_ZERO
+            );
+            NVIC_EnableIRQ(pstStatic->pstHandleTimerBase->timer_irqn);
+        #else
+            HAL_TIM_Base_Start_IT(pstStatic->pstHandleTimerBase);
+        #endif
+    #endif
     
     // 初始化LastPosition为当前编码器位置
     astEncoderDeviceParam[emDevNum].stRunningParam.LastPosition = lEncoderGetEncoder(emDevNum);
@@ -144,23 +192,12 @@ float fEncoderGetSpeed(emEncoderDevNumTdf emDevNum){
     return astEncoderDeviceParam[emDevNum].stRunningParam.Speed;
 }
 
-
-/**
- * @brief 计算编码器速度
- * @param emDevNum 编码器设备号
- */
-void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum)
+void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
 {
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
     stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
-    
-    if(pstRunning->_1ms_time_count++ < ENCODER_HANDLE_FREQ){
-        return;
-    }
-    
-    pstRunning->_1ms_time_count = 0; 
 
-//    float temp = 0.0;
+    //    float temp = 0.0;
 
     /* 计算电机转速 
        第一步 ：计算ms毫秒内计数变化量
@@ -200,6 +237,42 @@ void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum)
 }
 
 /**
+ * @brief 计算编码器速度
+ * @param htim 定时器句柄指针
+ */
+#if (QEPACK_PLATFORM == TI)
+    void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum){
+        stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
+        stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+        
+        if(pstRunning->_1ms_time_count++ < ENCODER_HANDLE_FREQ){
+            return;
+        }
+        pstRunning->_1ms_time_count = 0; 
+
+        vEncoderCalculateSpeed(emDevNum);
+    }
+#else
+    void vEncoderComputeSpeed(TIM_HandleTypeDef *htim){
+        // 匹配句柄
+        for (int i = 0; i < ENCODER_DEV_NUM; i++) {
+            stEncoderDeviceParamTdf *pstParam = &astEncoderDeviceParam[i];
+            if(pstParam->stStaticParam.pstHandleTimerBase == htim){
+                stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[i].stRunningParam;
+                stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[i].stStaticParam;
+                
+                if(pstRunning->_1ms_time_count++ < ENCODER_HANDLE_FREQ){
+                    return;
+                }
+                pstRunning->_1ms_time_count = 0; 
+
+                vEncoderCalculateSpeed((emEncoderDevNumTdf)i);
+            }
+        }
+    }
+#endif
+
+/**
  * @brief 标记编码器数据状态
  * @param htim 定时器句柄指针
  * @return 无
@@ -235,7 +308,7 @@ void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum)
 //    return NOT_UPDATE;
 //}
 
-#if ENCODER_HANDLE_PLAN // TIM
+#if (ENCODER_HANDLE_PLAN == TIM) // TIM
 /**
  * @brief       编码器溢出处理函数
  * @param       htim:定时器句柄指针
@@ -250,9 +323,9 @@ void vEncoder_Handler(TIM_HandleTypeDef *htim)
             // 检查是否是编码器定时器的溢出中断
             if (__HAL_TIM_GET_FLAG(htim, TIM_FLAG_UPDATE) != RESET) {
                 if(__HAL_TIM_IS_TIM_COUNTING_DOWN(htim)) {
-                    pstParam->stRunningParam.times_reach_arr--;
+                    pstParam->stRunningParam.times_reach--;
                 } else {
-                    pstParam->stRunningParam.times_reach_arr++;
+                    pstParam->stRunningParam.times_reach++;
                 }
                 __HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE);
             }
@@ -268,25 +341,56 @@ void vEncoder_Handler(TIM_HandleTypeDef *htim)
  * @param       GPIO_Pin: GPIO端口
  * @retval      无
  */
+#if (QEPACK_PLATFORM == TI)
+// 引脚测试接口
+GPIO_PinState ReadPin(emEncoderDevNumTdf emDevNum){
+    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+
+    return TI_GPIO_ReadPin(
+        pstStatic->pstDirGpioBase, 
+        pstStatic->usDirGpioPin
+    );
+}
+
+void vEncoder_Handler(emEncoderDevNumTdf emDevNum)
+{
+    stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
+    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+
+    pstRunning->emCurrentPinState = TI_GPIO_ReadPin(
+        pstStatic->pstDirGpioBase, 
+        pstStatic->usDirGpioPin
+    );
+    
+    pstRunning->TotalPosition += 
+    pstRunning->direction_map[pstRunning->emCurrentPinState] 
+    * pstStatic->ucNumberofEdgesToDetect;
+
+    if(!pstRunning->isDoneAInterrupt) pstRunning->isDoneAInterrupt = 1;
+
+    pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR = 0;
+}
+#else
+
 void vEncoder_Handler(uint16_t GPIO_Pin)
 {
     // 匹配句柄
     for (int i = 0; i < ENCODER_DEV_NUM; i++) {
         stEncoderDeviceParamTdf *pstParam = &astEncoderDeviceParam[i];
         if(pstParam->stStaticParam.EXTI_Pin == GPIO_Pin){
-            GPIO_PinState result = HAL_GPIO_ReadPin(
-                                        pstParam->stStaticParam.Input_GpioPort, 
-                                        pstParam->stStaticParam.Input_Pin
-                                    );
- 
-            pstParam->stRunningParam.TotalPosition += pstParam->stRunningParam.direction_map[result];
+                GPIO_PinState result = HAL_GPIO_ReadPin(
+                    pstParam->stStaticParam.Input_GpioPort, 
+                    pstParam->stStaticParam.Input_Pin
+                );
 
+            pstParam->stRunningParam.TotalPosition += 
+            pstParam->stRunningParam.direction_map[result];
             
             break;
         }
     }
-}
-
+}         
+#endif
 /**
  * @brief 获取编码器距离
  * @param emDevNum 编码器设备号

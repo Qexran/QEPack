@@ -2,7 +2,7 @@
 
 #if (QEPACK_PLATFORM == TI)
 
-
+#include "ti_msp_dl_config.h"
 
 void TI_Delay(uint32_t ms)
 {
@@ -132,8 +132,8 @@ void TI_I2C_Mem_Write(
  * @param GPIO_Pin GPIO引脚号
  * @return uint8_t 引脚状态
  */
-uint8_t TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin){
-    return DL_GPIO_readPins(GPIOx, GPIO_Pin) ? 0 : 1; 
+GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin){
+    return DL_GPIO_readPins(GPIOx, GPIO_Pin) ? GPIO_PIN_SET : GPIO_PIN_RESET; 
 }
 
 /**
@@ -196,7 +196,13 @@ void TI_UART_Transmit(
 
 
 
-
-
+/**
+ * @brief 获取自系统启动以来的毫秒数
+ * @return uint32_t 系统启动以来的毫秒数
+ */
+uint32_t TI_GetTick(void)
+{
+    return tick_ms;
+}
 
 #endif

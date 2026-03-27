@@ -129,6 +129,21 @@ void vDevicePeriodExecute(){
             vUltrasonicDevicePeriodExecute(ULTRASONIC1); 
         #endif
     #endif
+    /* STEP */
+    #if STEP_M_ENABLE
+        #ifdef STEP0 
+            vStepProcess(STEP0); 
+        #endif
+        #ifdef STEP1 
+            vStepProcess(STEP1); 
+        #endif
+        #ifdef STEP2 
+            vStepProcess(STEP2); 
+        #endif
+        #ifdef STEP3 
+            vStepProcess(STEP3); 
+        #endif
+    #endif
 }
 
 

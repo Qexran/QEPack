@@ -110,6 +110,11 @@ void vTimerTickHandler(void);
 uint8_t ucTimerIsEnabled(emTimerDevNumTdf emDevNum);
 uint32_t ulTimerGetRemaining(emTimerDevNumTdf emDevNum);
 
+#if (QEPACK_PLATFORM == TI)
+    void v1MSTimerBaseInit(GPTIMER_Regs *gptimer, DL_TIMER_IIDX interruptMask, IRQn_Type IRQn);
+#else
+    void v1MSTimerBaseInit(TIM_HandleTypeDef *htim);
+#endif
 #endif
 
 #endif

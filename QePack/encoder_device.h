@@ -18,6 +18,10 @@
 
 #if (QEPACK_PLATFORM == ST)
     #include "tim.h"
+#else
+    #if (ENCODER_IS_USE_PARASITISM)
+        #include "timer_controller.h"
+    #endif
 #endif
 
 /** @brief 编码器设备号枚举 */
@@ -37,12 +41,27 @@ typedef enum {
 /** @brief 编码器静态参数定义 */
 typedef struct {
     #if ENCODER_HANDLE_PLAN // TIM
-        TIM_HandleTypeDef   *pstTimerBase;              // 定时器外设基地址（如TIM2）
+
+        #if (QEPACK_PLATFORM == TI)                     // 编码器定时器句柄
+            stTimerTdf *pstTimerBase;
+        #else
+            TIM_HandleTypeDef   *pstTimerBase;
+        #endif
+
     #else // GPIO
-        GPIO_TypeDef        *EXTI_GpioPort;             // Encoder1 GPIO端口
-        uint16_t            EXTI_Pin;                   // Encoder1 引脚
-        GPIO_TypeDef        *Input_GpioPort;            // Encoder2 GPIO端口
-        uint16_t            Input_Pin;                  // Encoder2 引脚
+
+        #if (QEPACK_PLATFORM == TI )
+            stTimerTdf          *pstCompareTimerBase;      // 比较定时器句柄
+            GPIO_Regs           *pstDirGpioBase;           // 检测编码器方向的 GPIOx
+            uint32_t            usDirGpioPin;              // 检测编码器方向的 GPIO_PIN_x
+            uint8_t             ucNumberofEdgesToDetect;   // 比较定时器每次触发中断需要触发边缘的次数
+        #else
+            GPIO_TypeDef        *EXTI_GpioPort; 
+            uint16_t            EXTI_Pin;       
+            GPIO_TypeDef        *Input_GpioPort;
+            uint16_t            Input_Pin;      
+        #endif
+
     #endif
     
     uint16_t Roto_Ratio;                                // 倍频系数
@@ -51,7 +70,15 @@ typedef struct {
     
     emEncoderDirTdf Encoder_Dir;                        // 编码器方向
     
-    float Wheel_Diameter_mm;                             // 轮子直径（单位：毫米）
+    float Wheel_Diameter_mm;                            // 轮子直径（单位：毫米）
+
+    #if !ENCODER_IS_USE_PARASITISM                      // 用于处理数据的定时器句柄
+        #if (QEPACK_PLATFORM == TI)
+            stTimerTdf *pstHandleTimerBase;
+        #else
+            TIM_HandleTypeDef *pstHandleTimerBase; 
+        #endif
+    #endif
     
 } stEncoderStaticParamTdf;
 
@@ -62,9 +89,13 @@ typedef struct {
     float Speed;                       // 当前速度（单位：转/分钟）
     float Distance_mm;                 // 累计路程（单位：毫米）
     //float LastSpeed;                   // 上一次速度
-    int32_t times_reach_arr;            // 到达ARR的次数
+    int32_t times_reach;            // 到达ARR的次数
     uint16_t _1ms_time_count;            // 1ms计数
     int8_t direction_map[2];            // 方向映射表
+    int8_t intEncoderCompareCurrentDir;   // 编码器比较当前的方向
+
+    GPIO_PinState emCurrentPinState;    // 当前读取到的电平状态
+    uint8_t isDoneAInterrupt;           // 是否完成一次中断触发
 } stEncoderRunningParamTdf;
 
 /** @brief 编码器设备参数总结构体 */
@@ -86,20 +117,31 @@ void vEncoderStart(emEncoderDevNumTdf emDevNum);
 void vEncoderStartTimer(emEncoderDevNumTdf emDevNum, uint32_t u32Period);
 
 /* 获取编码器速度 */
-void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum);
+#if (QEPACK_PLATFORM == TI)
+    void vEncoderComputeSpeed(emEncoderDevNumTdf emDevNum);
+#else
+    void vEncoderComputeSpeed(TIM_HandleTypeDef *htim);
+#endif
 
 //float fEncoderGetDistance(emEncoderDevNumTdf emDevNum);
 
 /* 获取编码器数据状态 */
 //emEncoderDataStateTdf emEncoderGetDataState(emEncoderDevNumTdf emDevNum);
 
-/* 标记编码器数据状态 */
-void vEncoderSetDataState(TIM_HandleTypeDef *htim);
+/* 标记编码器数据状态 (该函数被废弃)*/
+// void vEncoderSetDataState(TIM_HandleTypeDef *htim);
 
-#if ENCODER_HANDLE_PLAN // TIM
+
+
+#if (ENCODER_HANDLE_PLAN == TIM) // TIM
     void vEncoder_Handler(TIM_HandleTypeDef *htim);
 #else
-    void vEncoder_Handler(uint16_t GPIO_Pin);
+    #if (QEPACK_PLATFORM == TI)
+        void vEncoder_Handler(emEncoderDevNumTdf emDevNum);
+        GPIO_PinState ReadPin(emEncoderDevNumTdf emDevNum);
+    #else
+        void vEncoder_Handler(uint16_t GPIO_Pin);
+    #endif
 #endif
 
 float fEncoderGetSpeed(emEncoderDevNumTdf emDevNum);

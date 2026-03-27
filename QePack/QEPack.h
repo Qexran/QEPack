@@ -4,7 +4,8 @@
 #include                    "it_controller.h"           // 中断管理器
 #include                    "ti_interrupt.h"
 
-// 生成 I2C 配置结构体
+// 生成配置结构体
+
 #define TI_GET_I2C_STRUCTURE(I2C_NAME) \
     (stI2CTdf){ \
         .i2c_inst         = I2C_NAME##_INST, \
@@ -19,21 +20,12 @@
         .vI2cInitFunc     = SYSCFG_DL_##I2C_NAME##_init, \
 }
 
-/**
-#define UART_0_INST_IRQHandler                                  UART0_IRQHandler
-#define UART_0_INST_INT_IRQN                                      UART0_INT_IRQn
-#define GPIO_UART_0_RX_PORT                                                GPIOA
-#define GPIO_UART_0_TX_PORT                                                GPIOA
-#define GPIO_UART_0_RX_PIN                                        DL_GPIO_PIN_11
-#define GPIO_UART_0_TX_PIN                                        DL_GPIO_PIN_10
-#define GPIO_UART_0_IOMUX_RX                                     (IOMUX_PINCM22)
-#define GPIO_UART_0_IOMUX_TX                                     (IOMUX_PINCM21)
-#define GPIO_UART_0_IOMUX_RX_FUNC                      IOMUX_PINCM22_PF_UART0_RX
-#define GPIO_UART_0_IOMUX_TX_FUNC                      IOMUX_PINCM21_PF_UART0_TX
-#define UART_0_BAUD_RATE                                                  (9600)
-#define UART_0_IBRD_33_kHZ_9600_BAUD                                         (1)
-#define UART_0_FBRD_33_kHZ_9600_BAUD                                         (9)
-*/
+#define TI_GET_TIMER_STRUCTURE(TIMER_NAME) \
+    (stTimerTdf){ \
+        .timer_inst         = TIMER_NAME##_INST, \
+        .clk_freq         = TIMER_NAME##_INST_CLK_FREQ, \
+        .timer_irqn         = TIMER_NAME##_INST_INT_IRQN, \
+    }
 
 #define TI_GET_UART_STRUCTURE(UART_NAME) \
     (stUartTdf){ \

@@ -4,7 +4,7 @@
 
 #if (QEPACK_PLATFORM == ST)
 
-#include "it_controller.h
+#include "it_controller.h"
 
 #ifdef HAL_TIM_MODULE_ENABLED
     #include "tim.h"

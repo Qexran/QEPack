@@ -76,7 +76,7 @@
 
 
 /* 舵机 相关 */
-#define SERVO_IS_ENABLE								    0								// 舵机模块总开关
+#define SERVO_IS_ENABLE								    1								// 舵机模块总开关
 #define SERVO_DEV_NUM        						    1               				// 舵机设备数量
 #define SERVO_DEFAULT_PWM_FREQ						    50.0f							// 舵机默认PWM频率(Hz)，常规50Hz
 										// 180°角度型舵机默认参数 [使用 vServoDeviceDefaultInit_Angle() ]
@@ -105,10 +105,10 @@
 /* 编码器 相关 */
 #define ENCODER_IS_ENABLE                               1                               // 编码器 模块总开关
 #define ENCODER_HANDLE_FREQ                             50                              // 编码器处理数据的时间 (ms)
+#define ENCODER_IS_USE_PARASITISM                       0                               // 使用寄生的定时器处理数据
                             /* tips:对于GPIO模式，应一引脚设置外部中断，一引脚设置输入模式 */
-#define ENCODER_HANDLE_PLAN                             TIM                             // 编码器处理方案 (TIM/GPIO)
-#define ENCODER_COMPUTE_IT_TIM                          htim1                           // 处理编码器数据的定时器 (1ms中断)
-#define ENCODER_DEV_NUM    							    1							    // 编码器 数量
+#define ENCODER_HANDLE_PLAN                             GPIO                             // 编码器处理方案 (TIM/GPIO)
+#define ENCODER_DEV_NUM    							      1							    // 编码器 数量
 #define ENCODER_0                                       emEncoderDevNum0
 
 /* PID 相关 */
@@ -118,7 +118,7 @@
 #define PID1                                            emPidDevNum1
 
 /* 电机 相关 */
-#define MOTOR_IS_ENABLE                                 0                               // 电机 模块总开关
+#define MOTOR_IS_ENABLE                                 1                               // 电机 模块总开关
 #define MOTOR_DEV_NUM                                   1                               // 电机 设备数量
 #define MOTOR0                                          emMotorDevNum0
 
@@ -145,7 +145,15 @@
 #define ST_TIMER_CONTROLLER_TICK_TIM                    htim1                           // 1ms 定时器句柄(STM)
 /* 若使用TI平台，请在ti_interrupt.c 中传入定时器实例名 */
 #define TIMER0                                          emTimerDevNum0
-#endif
 
+
+/* 步骤机 相关 */
+#define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关
+#define STEP_M_MAX_STEP_NUM                             20                              // 最大步骤数量
+#define STEP_M_MAX_RULE_NUM                             4                               // 最大规则数量
+#define STEP_M_NUM                                      1                               // 定时器对象数量
+#define STEP0                                          emStepDevNum0
+
+#endif
 
 

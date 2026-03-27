@@ -41,8 +41,12 @@ void vServoDeviceInit(stServoStaticParamTdf *pstInit, emServoDevNumTdf emDevNum)
     memcpy(&astServoDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stServoStaticParamTdf));
     
     // 2. 启动PWM输出
-    HAL_TIM_PWM_Start(astServoDeviceParam[emDevNum].stStaticParam.pstTimHandle,
-                      astServoDeviceParam[emDevNum].stStaticParam.ulChannel);
+    #if (QEPACK_PLATFORM == TI)
+        DL_Timer_startCounter(astServoDeviceParam[emDevNum].stStaticParam.stTimer->timer_inst);
+    #else
+        HAL_TIM_PWM_Start(astServoDeviceParam[emDevNum].stStaticParam.pstTimHandle,
+                        astServoDeviceParam[emDevNum].stStaticParam.ulChannel);
+    #endif
 }
 
 /// @brief      值转脉冲宽度（内部函数）
@@ -96,13 +100,25 @@ static void vServoUpdatePwm(emServoDevNumTdf emDevNum, float fPulseUs)
     
     stServoStaticParamTdf *pstStatic = &astServoDeviceParam[emDevNum].stStaticParam;
     
-    // 计算ARR值（定时器自动重装值）
-    uint32_t ulArr = (SystemCoreClock / (pstStatic->fPwmFreq * (pstStatic->pstTimHandle->Init.Prescaler + 1))) - 1;
-    // 计算CCR值（比较值）：CCR = (脉冲宽度/1秒) * PWM频率 * ARR
-    uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * ulArr);
-    
-    // 设置PWM比较值
-    __HAL_TIM_SET_COMPARE(pstStatic->pstTimHandle, pstStatic->ulChannel, ulCcr);
+    #if (QEPACK_PLATFORM == TI )
+        /* 待写 */
+        uint32_t Prescaler = CPUCLK_FREQ / pstStatic->stTimer->clk_freq;
+        // 计算ARR值（定时器自动重装值）
+        uint32_t ulArr = (CPUCLK_FREQ / (pstStatic->fPwmFreq * (Prescaler))) - 1;
+        // 计算CCR值（比较值）：CCR = (脉冲宽度/1秒) * PWM频率 * ARR
+        uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * ulArr);
+        
+        // 设置PWM比较值
+        DL_Timer_setCaptureCompareValue(pstStatic->stTimer->timer_inst, ulCcr, pstStatic->emChannel);
+    #else
+        // 计算ARR值（定时器自动重装值）
+        uint32_t ulArr = (SystemCoreClock / (pstStatic->fPwmFreq * (pstStatic->pstTimHandle->Init.Prescaler + 1))) - 1;
+        // 计算CCR值（比较值）：CCR = (脉冲宽度/1秒) * PWM频率 * ARR
+        uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * ulArr);
+        
+        // 设置PWM比较值
+        __HAL_TIM_SET_COMPARE(pstStatic->pstTimHandle, pstStatic->ulChannel, ulCcr);
+    #endif
 }
 
 /// @brief      直接设置舵机值（静态模式）
@@ -188,76 +204,145 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
 /// @param      emDevNum   ：设备号
 /// @param      pstTimHandle ：TIM句柄
 /// @param      ulChannel ：PWM通道
-void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
-{
-    if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
-    
-    // 1. 静态参数（使用project_config.h的默认宏定义）
-    stServoStaticParamTdf stStaticInit = {
-        .pstTimHandle = pstTimHandle,
-        .ulChannel = ulChannel,
-        .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
-        .emType = emServoType_Angle,
-        .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
-        .fValueMax = SERVO_DEFAULT_ANGLE_MAX,
-        .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
-        .fPulseMid = 0.0f, // 180°舵机无需中位脉冲
-        .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
-    };
-    
-    // 2. 运行参数（默认配置）
-    stServoRunningParamTdf stRunInit = {
-        .emMode = emServoMode_Static,
-        .fCurrentValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2, // 初始90°
-        .fTargetValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2,
-        .fSpeed = SERVO_DEFAULT_SPEED,
-    };
-    
-    // 3. 执行初始化
-    vServoDeviceInit(&stStaticInit, emDevNum);
-    vServoDeviceRunningParamInit(&stRunInit, emDevNum);
-    
-    // 4. 设置初始角度（90°）
-    vServoSetValue(emDevNum, stRunInit.fCurrentValue);
-}
+#if (QEPACK_PLATFORM == TI )
+    void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || stTimer == NULL) return;
+        
+        // 1. 静态参数（使用project_config.h的默认宏定义）
+        stServoStaticParamTdf stStaticInit = {
+            .stTimer = stTimer,
+            .emChannel = emChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f, // 180°舵机无需中位脉冲
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+        
+        // 2. 运行参数（默认配置）
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2, // 初始90°
+            .fTargetValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+        
+        // 3. 执行初始化
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        
+        // 4. 设置初始角度（90°）
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#else
+    void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
+        
+        // 1. 静态参数（使用project_config.h的默认宏定义）
+        stServoStaticParamTdf stStaticInit = {
+            .pstTimHandle = pstTimHandle,
+            .ulChannel = ulChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f, // 180°舵机无需中位脉冲
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+        
+        // 2. 运行参数（默认配置）
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2, // 初始90°
+            .fTargetValue = (SERVO_DEFAULT_ANGLE_MIN + SERVO_DEFAULT_ANGLE_MAX) / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+        
+        // 3. 执行初始化
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        
+        // 4. 设置初始角度（90°）
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#endif
 
 /// @brief      360°旋转型舵机默认参数初始化（简化版）
 /// @param      emDevNum   ：设备号
 /// @param      pstTimHandle ：TIM句柄
 /// @param      ulChannel ：PWM通道
-void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
-{
-    if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
-    
-    // 1. 静态参数（使用project_config.h的默认宏定义）
-    stServoStaticParamTdf stStaticInit = {
-        .pstTimHandle = pstTimHandle,
-        .ulChannel = ulChannel,
-        .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
-        .emType = emServoType_360,
-        .fValueMin = SERVO_360_SPEED_MIN,    // -100
-        .fValueMax = SERVO_360_SPEED_MAX,    // 100
-        .fPulseMin = SERVO_DEFAULT_PULSE_MIN,// 500us
-        .fPulseMid = SERVO_360_PULSE_MID,    // 1500us（停转）
-        .fPulseMax = SERVO_DEFAULT_PULSE_MAX,// 2500us
-    };
-    
-    // 2. 运行参数（默认配置）
-    stServoRunningParamTdf stRunInit = {
-        .emMode = emServoMode_Static,
-        .fCurrentValue = 0.0f, // 初始停转
-        .fTargetValue = 0.0f,
-        .fSpeed = SERVO_DEFAULT_SPEED,
-    };
-    
-    // 3. 执行初始化
-    vServoDeviceInit(&stStaticInit, emDevNum);
-    vServoDeviceRunningParamInit(&stRunInit, emDevNum);
-    
-    // 4. 设置初始速度（停转）
-    vServoSetValue(emDevNum, stRunInit.fCurrentValue);
-}
-
+#if (QEPACK_PLATFORM == TI )
+    void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || stTimer == NULL) return;
+        
+        // 1. 静态参数（使用project_config.h的默认宏定义）
+        stServoStaticParamTdf stStaticInit = {
+            .stTimer = stTimer,
+            .emChannel = emChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_360,
+            .fValueMin = SERVO_360_SPEED_MIN,    // -100
+            .fValueMax = SERVO_360_SPEED_MAX,    // 100
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,// 500us
+            .fPulseMid = SERVO_360_PULSE_MID,    // 1500us（停转）
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,// 2500us
+        };
+        
+        // 2. 运行参数（默认配置）
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = 0.0f, // 初始停转
+            .fTargetValue = 0.0f,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+        
+        // 3. 执行初始化
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        
+        // 4. 设置初始速度（停转）
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#else
+    void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
+        
+        // 1. 静态参数（使用project_config.h的默认宏定义）
+        stServoStaticParamTdf stStaticInit = {
+            .pstTimHandle = pstTimHandle,
+            .ulChannel = ulChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_360,
+            .fValueMin = SERVO_360_SPEED_MIN,    // -100
+            .fValueMax = SERVO_360_SPEED_MAX,    // 100
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,// 500us
+            .fPulseMid = SERVO_360_PULSE_MID,    // 1500us（停转）
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,// 2500us
+        };
+        
+        // 2. 运行参数（默认配置）
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = 0.0f, // 初始停转
+            .fTargetValue = 0.0f,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+        
+        // 3. 执行初始化
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        
+        // 4. 设置初始速度（停转）
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#endif
 
 /// @brief      设置舵机模式
 /// @param      emDevNum   ：设备号
