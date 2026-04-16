@@ -103,7 +103,7 @@
 #define ADC_RESOLUTION                                  4095                            // ADC 精度(12位: 2^12 - 1)
 #define ADC_VREF                                        3.3                             // ADC 电压
 #define ADC_CONVERSION_TIMEOUT_MS                       50                              // ADC 转换超时时间
-#define ADC_DEV_NUM        						        2               				// ADC 模块数量
+#define ADC_DEV_NUM        						                  2               				// ADC 模块数量
 #define ADC_0                                           emAdcDevNum0
 
 /* 编码器 相关 */
@@ -111,13 +111,18 @@
 #define ENCODER_HANDLE_FREQ                             50                              // 编码器处理数据的时间 (ms)
 #define ENCODER_IS_USE_PARASITISM                       0                               // 使用寄生的定时器处理数据
                             /* tips:对于GPIO模式，应一引脚设置外部中断，一引脚设置输入模式 */
-#define ENCODER_HANDLE_PLAN                             GPIO                             // 编码器处理方案 (TIM/GPIO)
-#define ENCODER_DEV_NUM    							      1							    // 编码器 数量
+#define ENCODER_HANDLE_PLAN                             GPIO                            // 编码器处理方案 (TIM/GPIO)
+#define ENCODER_DEV_NUM    							                1							                  // 编码器 数量
 #define ENCODER_0                                       emEncoderDevNum0
 
 /* 线性CCD 相关 */
 #define LINEAR_CCD_IS_ENABLE                            1                               // 线性CCD 模块总开关
 #define LINER_CCD_DEV_NUM                               1                               // 线性CCD 设备数量
+#define LINER_CCD_PIXEL_COUNT                           128                             // 线性CCD 像素数量
+#define LINER_CCD_EXPOSURE_TIME                         2                               // 线性CCD 曝光时间
+#define LINER_CCD_NEGLECT_THREHOLD                      5                               // 线性CCD 忽略像素阈值
+#define LINER_CCD_CENTERLINE_ERROR_THREHOLD             100                             // 线性CCD 中线过偏差忽略阈值
+#define LINER_CCD_IS_DEBUG_MODE                         1                               // 线性CCD 调试模式
 #define LINER_CCD0                                      emLinerCcdDevNum0
 
 /* PID 相关 */

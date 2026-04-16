@@ -129,9 +129,34 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum);
 void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum);                  // 初始化静态参数
 void vAdcDeviceRunningParamInit(stAdcRunningParamTdf *pstInit, emAdcDevNumTdf emDevNum);    // 初始化运行参数
 
+TI_StatusTypeDef TI_ADC_PollForConversion(emAdcDevNumTdf emDevNum, uint32_t ulTimeOut);
 #endif
 
 #endif
+
+/** adc test */
+// 待提供功能： TI poll conversion
+/**
+    Power Down Mode 模式应配置为 Manual，不需要节省能源
+    多通道转换时，只需要使能最后一个通道的中断，这样就能知道一次序列转换结束
+    采样时间推荐 Desired Sample Time 0 = 62.5 ns
+    
+    DMA Samples Count ：测一次触发dma后传的个数，几个通道填几个
+    使用dma模式时，应该用ADC的中断来触发dma传输，而不是触发到程序中
+    所以不需要配置Enable Interrupts，而应配置 Enable DMA Triggers 
+    Enable Interrupts 需要配置 DMA done
+    Address Mode 选 Fixed addr. to Block addr.
+    Source Length / Destination Length 应配置成 Half Word
+
+    Destination Address Direction 终点的地址递增方向选Increment
+
+    Transfer Mode dma传输完成一次（Transfer Size）的时候，block的地址要不要回到开头
+
+    勾选Enable FIFO Mode 的情况：
+    DMA Samples Count选6
+    Enable DMA Triggers选MEM10 result loaded interrupt
+    Source Length / Destination Length 应配置成 Word
+*/
 
     // 1. 初始化参数
 //    stAdcStaticParamTdf stAdcStaticInit;

@@ -80,6 +80,7 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
 
             DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t) &pstStatic->pulDmaBuffer[0]);
 
+            DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
         #endif
 
         /*
@@ -92,9 +93,11 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
             DL_ADC12_getStatus(ADC12_0_INST)) {
             DL_ADC12_stopConversion(ADC12_0_INST);
         }
+        
             
         /* 使能 ADC12_0 的中断请求 */
         NVIC_EnableIRQ(pstStatic->pstAdcBase->adc_irqn);
+        
     #endif
     
 //    // 启动DMA转换
@@ -134,11 +137,7 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
             }
 
         #else
-            TI_ADC_Start_DMA(
-                pstStatic->pstAdcBase,
-                (uint32_t *)pstStatic->pulDmaBuffer,
-                pstStatic->ulConversionNumber
-            );
+            TI_ADC_Start(pstStatic->pstAdcBase);
         #endif
     }
 
@@ -161,11 +160,7 @@ void vAdcStart(emAdcDevNumTdf emDevNum, DL_ADC12_MEM_IDX Channel){
         }
         HAL_ADC_Start(pstStatic->pstAdcBase);
     #else
-        /* 触发 ADC12_0 一次ADC转换 */
-        DL_ADC12_startConversion(pstStatic->pstAdcBase->adc_inst);
-
-        /* 重新使能 ADC 转换（针对单次触发模式，通常需要重新使能才能响应下一次启动信号） */
-        DL_ADC12_enableConversions(pstStatic->pstAdcBase->adc_inst); 
+        TI_ADC_Start(pstStatic->pstAdcBase);
     #endif
 }
 
@@ -196,8 +191,8 @@ float fADCConvertToResult(
     */
     uint16_t* pstADCGetValue(emAdcDevNumTdf emDevNum){
         #if (QEPACK_PLATFORM == TI)
-            DL_ADC12_disableConversions(ADC12_0_INST);
             DL_ADC12_enableConversions(ADC12_0_INST);
+            DL_ADC12_disableConversions(ADC12_0_INST);
         #endif
         
         stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
@@ -227,6 +222,26 @@ float fADCConvertToResult(
         #endif
     }
 #endif
+
+/**
+    函数原型:
+    HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout)
+*/
+TI_StatusTypeDef TI_ADC_PollForConversion(
+    emAdcDevNumTdf emDevNum, uint32_t ulTimeOut
+){
+    unsigned long start, cur;
+    
+    mspm0_get_clock_ms(&start);
+    
+    while(emAdcGetDataState(emDevNum) != UPDATED){
+        mspm0_get_clock_ms(&cur);
+        
+        if(cur >= (start + ulTimeOut)) return TI_TIMEOUT;
+    }
+
+    return TI_OK;
+}
 
 /**
  * @brief 获取ADC转换状态
@@ -302,6 +317,8 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
     void ADC0_IRQHandler(void){
         emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC0);
         stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+        stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+        
         switch (DL_ADC12_getPendingInterrupt(ADC0)) {
             case DL_ADC12_IIDX_DMA_DONE:
             case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
@@ -316,6 +333,8 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
             case DL_ADC12_IIDX_MEM9_RESULT_LOADED:
             case DL_ADC12_IIDX_MEM10_RESULT_LOADED:
             case DL_ADC12_IIDX_MEM11_RESULT_LOADED:
+                DL_ADC12_stopConversion(pstStatic->pstAdcBase->adc_inst);
+                DL_ADC12_disableConversions(pstStatic->pstAdcBase->adc_inst);
                 pstRunning->emDataState = UPDATED;
                 break;
             default:
@@ -326,6 +345,8 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
     void ADC1_IRQHandler(void){
         emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC1);
         stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+        stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+
         switch (DL_ADC12_getPendingInterrupt(ADC1)) {
             case DL_ADC12_IIDX_DMA_DONE:
             case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
@@ -340,6 +361,8 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
             case DL_ADC12_IIDX_MEM9_RESULT_LOADED:
             case DL_ADC12_IIDX_MEM10_RESULT_LOADED:
             case DL_ADC12_IIDX_MEM11_RESULT_LOADED:
+                DL_ADC12_stopConversion(pstStatic->pstAdcBase->adc_inst);
+                DL_ADC12_disableConversions(pstStatic->pstAdcBase->adc_inst);
                 pstRunning->emDataState = UPDATED;
                 break;
             default:

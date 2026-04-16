@@ -158,7 +158,7 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
             UART_HandleTypeDef *huart, const uint8_t *pData, 
             uint16_t Size, uint32_t Timeout)
 */
-void TI_UART_Transmit(
+TI_StatusTypeDef TI_UART_Transmit(
     stUartTdf *uart_inst, const uint8_t *pData, 
     uint16_t Size, uint32_t Timeout
 ){
@@ -177,57 +177,44 @@ void TI_UART_Transmit(
             txSuccess = DL_UART_transmitDataCheck(uart_inst->uart_inst, pData[i]); 
             
             if (!txSuccess) {
-                // 如果写入失败（因为忙），检查是否超时
                 mspm0_get_clock_ms(&cur);
 
                 if ((cur - start) >= Timeout) {
                     // === 超时处理 ===
-                    // 可以选择返回错误码，或者 break 跳出循环
-                    return; 
+                    return TI_TIMEOUT; 
                 }
                 
-                // 可选：稍微延时一点点，避免死循环占用 100% CPU (视系统需求而定)
-                // __asm(" NOP "); 
             }
         }
         // 如果 txSuccess 为 true，说明数据已写入，继续循环发送下一个字节
     }
+
+    return TI_OK;
 }
 
-/**
-    函数原型:
-    HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout)
-*/
-void TI_ADC_PollForConversion(
-    stAdcTdf *adc_inst, uint32_t Timeout
-){
-    unsigned long start, cur;
-    
-    mspm0_get_clock_ms(&start);
-    
-    while (1){
-        
-        mspm0_get_clock_ms(&cur);
-        if(cur >= (start + Timeout))
-        {
-            // 超时
-            
-            break;
-        }
-    }
-}
 
 /**
     函数原型:
     HAL_StatusTypeDef HAL_ADC_Start_DMA(
         ADC_HandleTypeDef* hadc, uint32_t* pData, uint32_t Length)
 */
-void TI_ADC_Start_DMA(stAdcTdf *pstAdcBase, uint32_t *pData, uint32_t Length){
-    DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, (1024 * Length) >> 1);
+void TI_ADC_Start(stAdcTdf *pstAdcBase){
+    // DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, (1024 * Length) >> 1);
 
-    DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
-    DL_ADC12_enableDMA(pstAdcBase->adc_inst);
+    /*
+        * Check the ADC started converting in single channel repeat mode.
+    */
+    if (DL_ADC12_STATUS_CONVERSION_ACTIVE == DL_ADC12_getStatus(ADC12_0_INST)) {
+        DL_ADC12_stopConversion(ADC12_0_INST);
+    }
+
+    /* 使能 ADC 转换（针对单次触发模式，需要重新W使能才能响应下一次启动信号） */
+    DL_ADC12_enableConversions(pstAdcBase->adc_inst); 
+
+    /* 触发 ADC12_0 一次ADC转换 */
     DL_ADC12_startConversion(pstAdcBase->adc_inst);
+    
+    // DL_ADC12_enableDMA(pstAdcBase->adc_inst);
 }
 
 

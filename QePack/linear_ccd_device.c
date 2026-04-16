@@ -8,8 +8,18 @@
 #include "linear_ccd_device.h"
 #if LINEAR_CCD_IS_ENABLE
 
-volatile uint16_t adcValue;
+
 stLinerCcdDeviceParamTdf astLinerCcdDeviceParam[LINER_CCD_DEV_NUM];
+
+/**
+ * @brief 土制Delay
+ */
+static void Dly_us(uint8_t us){
+   int i, j; 
+   for(j=0;j<us;j++){
+       for(i=0;i<10;i++); 
+   }
+}
 
 /**
  * @brief 获取线性CCD设备参数
@@ -58,25 +68,15 @@ static void vLinerCcdSetClk(emLinerCcdDevNumTdf emDevNum, uint8_t state)
     #endif
 }
 
-/**
- * @brief 设置ADC转换标志位
- * @param emDevNum 设备号
- * @param state 标志位状态（0/1）
- */
-void vSetAdcConvertFlag(emLinerCcdDevNumTdf emDevNum, uint8_t state)
-{
-    stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
-    pstRunning->ucCheckADC = state;
-}
 
 /**
  * @brief 读取ADC值
  * @param emDevNum 设备号
- * @return uint16_t ADC采样值
  */
-static uint16_t usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
+static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
 {
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
     #if (QEPACK_PLATFORM == ST)
         ADC_ChannelConfTypeDef sConfig = {0};
@@ -86,22 +86,34 @@ static uint16_t usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
         if (HAL_ADC_ConfigChannel(pstStatic->hadc, &sConfig) == HAL_OK) {
             HAL_ADC_Start(pstStatic->hadc);
             HAL_ADC_PollForConversion(pstStatic->hadc, 10);
-            adcValue = HAL_ADC_GetValue(pstStatic->hadc);
+            pstRunning->adcValue = HAL_ADC_GetValue(pstStatic->hadc);
             HAL_ADC_Stop(pstStatic->hadc);
         }
     #else
-        /** TODO.. */
-        // vAdcStart(ADC_0);
+        // 无论在普通还是DMA模式下，都应只设置一个通道
+        
+        const stAdcDeviceParamTdf *stAdc = c_pstGetAdcDeviceParam(pstStatic->emAdcDevNum);
+        
+        if(stAdc->stStaticParam.ulConversionNumber > 1) return TI_ERROR;
+
         #if ADC_IS_USE_DMA
+            vAdcStart(pstStatic->emAdcDevNum);
         #else
             vAdcStart(pstStatic->emAdcDevNum, pstStatic->emAdcChannel);
-            if(emAdcGetDataState(pstStatic->emAdcDevNum) == UPDATED){
-                adcValue = usADCGetValue(pstStatic->emAdcDevNum);
-            }
         #endif
+        
+        if(TI_ADC_PollForConversion(pstStatic->emAdcDevNum, 10)){
+            #if ADC_IS_USE_DMA
+                
+                uint16_t *result = pstADCGetValue(pstStatic->emAdcDevNum);
+                pstRunning->adcValue = result[0];
+            #else
+                pstRunning->adcValue = usADCGetValue(pstStatic->emAdcDevNum);
+            #endif
+        }
     #endif
-    
-    return adcValue;
+
+    return TI_OK;
 }
 
 /**
@@ -124,9 +136,10 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
            sizeof(stLinerCcdRunningParamTdf));
     
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
-    pstRunning->sCenterLine = 64;
-    pstRunning->sLastCenterLine = 64;
-    pstRunning->ucDataValid = 0;
+    
+    // 64 ?!
+    pstRunning->sCenterLine = 0;
+    pstRunning->sLastCenterLine = 0;
 
 }
 
@@ -134,59 +147,56 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
  * @brief 读取CCD像素数据
  * @param emDevNum 设备号
  */
-void vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
+TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
-    uint8_t ucPixelCount = pstStatic->ucPixelCount;
-    if (ucPixelCount > 128) ucPixelCount = 128;
-    
     vLinerCcdSetClk(emDevNum, 1);
     vLinerCcdSetSi(emDevNum, 0);
-    Delay_us(1);
+    Dly_us(1);
     
     vLinerCcdSetSi(emDevNum, 1);
     vLinerCcdSetClk(emDevNum, 0);
-    Delay_us(1);
+    Dly_us(1);
     
     vLinerCcdSetClk(emDevNum, 1);
     vLinerCcdSetSi(emDevNum, 0);
-    Delay_us(1);
+    Dly_us(1);
     
-    for (uint8_t i = 0; i < ucPixelCount; i++) {
+    for (uint8_t i = 0; i < LINER_CCD_PIXEL_COUNT; i++) {
         vLinerCcdSetClk(emDevNum, 0);
-        Delay_us(pstStatic->usExposureTimeUs);
         
-        pstRunning->ausPixelData[i] = usLinerCcdReadAdc(emDevNum) >> 4;
+        // 调节曝光时间
+        Dly_us(LINER_CCD_EXPOSURE_TIME);
+        
+        usLinerCcdReadAdc(emDevNum);
+
+        pstRunning->ausPixelData[i] = pstRunning->adcValue >> 4;
         
         vLinerCcdSetClk(emDevNum, 1);
-        Delay_us(1);
+        Dly_us(1);
     }
     
-    pstRunning->ucDataValid = 1;
-    pstRunning->ucFrameCount++;
+    return TI_OK;
 }
 
 /**
- * @brief 计算动态阈值
+ * @brief 计算黑白阈值
  * @param emDevNum 设备号
  */
-void vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
+TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
-    uint8_t ucStart = pstStatic->ucStartPixel;
-    uint8_t ucEnd = pstStatic->ucEndPixel;
-    
-    if (ucEnd > 127) ucEnd = 127;
-    if (ucStart >= ucEnd) return;
-    
+    uint8_t ucStart = 0 + LINER_CCD_NEGLECT_THREHOLD;
+    uint8_t ucEnd = LINER_CCD_PIXEL_COUNT - LINER_CCD_NEGLECT_THREHOLD;;
+
     uint16_t usMax = pstRunning->ausPixelData[ucStart];
     uint16_t usMin = pstRunning->ausPixelData[ucStart];
     
@@ -199,31 +209,37 @@ void vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
         }
     }
     
+    if(usMax == usMin) return TI_ERROR;
+    
     pstRunning->usMaxValue = usMax;
     pstRunning->usMinValue = usMin;
     pstRunning->usThreshold = (usMax + usMin) / 2;
+
+    return TI_OK;
 }
 
 /**
- * @brief 检测中线位置
+ * @brief 检测中线位置(单线)
  * @param emDevNum 设备号
  */
-void vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
+TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
     uint16_t usThreshold = pstRunning->usThreshold;
-    uint8_t ucStart = pstStatic->ucStartPixel;
-    uint8_t ucEnd = pstStatic->ucEndPixel;
     
+    uint8_t ucStart = 0 + LINER_CCD_NEGLECT_THREHOLD;
+    uint8_t ucEnd = LINER_CCD_PIXEL_COUNT - LINER_CCD_NEGLECT_THREHOLD;
+
     int16_t sLeft = -1;
     int16_t sRight = -1;
     
+    //寻找左边跳变沿，连续三个白像素后连续三个黑像素判断左边跳变沿
     for (uint8_t i = ucStart; i < ucEnd - 5; i++) {
-        if (pstRunning->ausPixelData[i] > usThreshold &&
+        if (pstRunning->ausPixelData[i]     > usThreshold &&
             pstRunning->ausPixelData[i + 1] > usThreshold &&
             pstRunning->ausPixelData[i + 2] > usThreshold &&
             pstRunning->ausPixelData[i + 3] < usThreshold &&
@@ -234,6 +250,7 @@ void vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
         }
     }
     
+    //寻找右边跳变沿，连续三个黑像素后连续三个白像素判断左边跳变沿
     for (int8_t j = ucEnd; j > ucStart + 5; j--) {
         if (pstRunning->ausPixelData[j] < usThreshold &&
             pstRunning->ausPixelData[j + 1] < usThreshold &&
@@ -254,6 +271,13 @@ void vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
     if (sLeft >= 0 && sRight >= 0) {
         pstRunning->sCenterLine = (sLeft + sRight) / 2;
     }
+    
+    /* 计算中线的偏差,如果太大则取上次的值 */
+    if(abs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
+        pstRunning->sCenterLine = pstRunning->sLastCenterLine;  
+        return TI_ERROR; 
+    }
+    return TI_OK;
 }
 
 /**
@@ -274,7 +298,7 @@ const uint16_t *pusLinerCcdGetPixelData(emLinerCcdDevNumTdf emDevNum)
  */
 int16_t sLinerCcdGetCenterLine(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return -1;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return 0;
     return astLinerCcdDeviceParam[emDevNum].stRunningParam.sCenterLine;
 }
 
@@ -289,26 +313,36 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
     return astLinerCcdDeviceParam[emDevNum].stRunningParam.usThreshold;
 }
 
-/**
- * @brief 发送数据到上位机（调试用）
- * @param emDevNum 设备号
- */
-void vLinerCcdSendToPc(emLinerCcdDevNumTdf emDevNum)
-{
-    if (emDevNum >= LINER_CCD_DEV_NUM) return;
-    
-    stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
-    
-    #if (QEPACK_PLATFORM == ST)
-        extern UART_HandleTypeDef huart1;
-        uint8_t header = 0xFF;
-        HAL_UART_Transmit(&huart1, &header, 1, 100);
-        for (uint8_t i = 0; i < 128; i++) {
-            uint8_t data = (uint8_t)pstRunning->ausPixelData[i];
-            if (data == 0xFF) data--;
-            HAL_UART_Transmit(&huart1, &data, 1, 10);
-        }
-    #endif
-}
+#if LINER_CCD_IS_DEBUG_MODE
+    /**
+    * @brief 发送数据到上位机
+    * @param emDevNum 设备号
+    */
+    void vLinerCcdSendToPc(emLinerCcdDevNumTdf emDevNum)
+    {
+        if (emDevNum >= LINER_CCD_DEV_NUM) return;
+        
+        stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+        stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
+        
+        #if (QEPACK_PLATFORM == ST)
+            uint8_t header = 0xFF;
+            HAL_UART_Transmit(pstStatic->huart, &header, 1, 100);
+            for (uint8_t i = 0; i < 128; i++) {
+                uint8_t data = (uint8_t)pstRunning->ausPixelData[i];
+                if (data == 0xFF) data--;
+                HAL_UART_Transmit(pstStatic->huart, &data, 1, 10);
+            }
+        #else
+            uint8_t header = 0xFF;
+            TI_UART_Transmit(pstStatic->huart, &header, 1, 100);
+            for (uint8_t i = 0; i < 128; i++) {
+                uint8_t data = (uint8_t)pstRunning->ausPixelData[i];
+                if (data == 0xFF) data--;
+                TI_UART_Transmit(pstStatic->huart, &data, 1, 10);
+            }
+        #endif
+    }
+#endif
 
 #endif

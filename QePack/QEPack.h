@@ -3,6 +3,7 @@
 
 #include                    "it_controller.h"           // 中断管理器
 #include                    "ti_interrupt.h"
+#include                    "ti_hardfault_helper.h"
 
 #if LINEAR_CCD_IS_ENABLE
     #include "linear_ccd_device.h"
@@ -68,22 +69,8 @@
     #include "adc_device.h"
 #endif
 
-#define ADC_CHANNEL_0                      DL_ADC12_MEM_IDX_0
-#define ADC_CHANNEL_1                      DL_ADC12_MEM_IDX_1
-#define ADC_CHANNEL_2                      DL_ADC12_MEM_IDX_2
-#define ADC_CHANNEL_3                      DL_ADC12_MEM_IDX_3
-#define ADC_CHANNEL_4                      DL_ADC12_MEM_IDX_4
-#define ADC_CHANNEL_5                      DL_ADC12_MEM_IDX_5
-#define ADC_CHANNEL_6                      DL_ADC12_MEM_IDX_6
-#define ADC_CHANNEL_7                      DL_ADC12_MEM_IDX_7
-#define ADC_CHANNEL_8                      DL_ADC12_MEM_IDX_8
-#define ADC_CHANNEL_9                      DL_ADC12_MEM_IDX_9
-#define ADC_CHANNEL_10                     DL_ADC12_MEM_IDX_10
-#define ADC_CHANNEL_11                     DL_ADC12_MEM_IDX_11
-
 
 // 生成配置结构体
-
 #define TI_GET_I2C_STRUCTURE(I2C_NAME) \
     (stI2CTdf){ \
         .i2c_inst         = I2C_NAME##_INST, \

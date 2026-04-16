@@ -20,6 +20,32 @@ typedef enum
   GPIO_PIN_SET
 } GPIO_PinState;
 
+/**
+ * @brief 全局状态枚举
+ */
+typedef enum
+{
+  TI_OK       = 0x00U,
+  TI_ERROR    = 0x01U,
+  TI_BUSY     = 0x02U,
+  TI_TIMEOUT  = 0x03U,
+  TI_IDLE     = 0X04U
+} TI_StatusTypeDef;
+
+
+#define ADC_CHANNEL_0                      DL_ADC12_MEM_IDX_0
+#define ADC_CHANNEL_1                      DL_ADC12_MEM_IDX_1
+#define ADC_CHANNEL_2                      DL_ADC12_MEM_IDX_2
+#define ADC_CHANNEL_3                      DL_ADC12_MEM_IDX_3
+#define ADC_CHANNEL_4                      DL_ADC12_MEM_IDX_4
+#define ADC_CHANNEL_5                      DL_ADC12_MEM_IDX_5
+#define ADC_CHANNEL_6                      DL_ADC12_MEM_IDX_6
+#define ADC_CHANNEL_7                      DL_ADC12_MEM_IDX_7
+#define ADC_CHANNEL_8                      DL_ADC12_MEM_IDX_8
+#define ADC_CHANNEL_9                      DL_ADC12_MEM_IDX_9
+#define ADC_CHANNEL_10                     DL_ADC12_MEM_IDX_10
+#define ADC_CHANNEL_11                     DL_ADC12_MEM_IDX_11
+
 typedef struct {
     I2C_Regs      *i2c_inst;          // I2C 模块寄存器基地址
     GPIO_Regs     *pstSclGpioPort;    // SCL 端口基地址
@@ -57,6 +83,7 @@ typedef struct {
     // TODO 定义DMA句柄
 } stAdcDmaTdf;
 
+
 typedef void (*vI2CInitFunc)(void);
 void SysTick_Init(void);
 void TI_Delay(uint32_t ms);
@@ -69,7 +96,7 @@ void TI_I2C_Mem_Write(
     uint8_t *pData, uint16_t Size, uint32_t Timeout
 );
 
-void TI_UART_Transmit(
+TI_StatusTypeDef TI_UART_Transmit(
     stUartTdf *i2c_inst, const uint8_t *pData, 
     uint16_t Size, uint32_t Timeout
 );
@@ -78,7 +105,7 @@ GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);
 
 void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinState);
 
-void TI_ADC_Start_DMA(stAdcTdf *pstAdcBase, uint32_t *pData, uint32_t Length);
+void TI_ADC_Start(stAdcTdf *pstAdcBase);
 
 #endif
 
