@@ -6,6 +6,15 @@ volatile unsigned long tick_ms;
 volatile uint32_t start_time;
 static uint8_t is_initialed_clock = 0;
 
+/**
+ * @brief SysTick处理函数
+ * 
+ */
+void SysTick_Handler(void)
+{
+    tick_ms++;
+}
+
 int mspm0_delay_ms(unsigned long num_ms)
 {
     start_time = tick_ms;
@@ -28,7 +37,7 @@ uint8_t ucGetSysTickInitialState(){
 void SysTick_Init(void)
 {
     is_initialed_clock = 1;
-    DL_SYSTICK_config(CPUCLK_FREQ/1000);
+    DL_SYSTICK_config(CPUCLK_FREQ / 1000);
     NVIC_SetPriority(SysTick_IRQn, 0);
 }
 

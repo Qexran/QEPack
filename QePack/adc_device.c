@@ -8,13 +8,15 @@
   */
 
 #include "adc_device.h"
-#if ADC_MOD_IS_ENABLE
+#if ADC_DEVICE_IS_ENABLE
 
 /* 全局ADC设备参数数组 */
 stAdcDeviceParamTdf astAdcDeviceParam[ADC_DEV_NUM];
 
 #if !ADC_IS_USE_DMA
-    ADC_ChannelConfTypeDef sConfig = {0};
+    #if (QEPACK_PLATFORM == ST)
+        ADC_ChannelConfTypeDef sConfig = {0};
+    #endif
 #endif
 
 /// @brief      获取ADC设备参数
@@ -39,30 +41,60 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
     memcpy(&astAdcDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stAdcStaticParamTdf));
 	memset(&astAdcDeviceParam[emDevNum].stRunningParam, 0, sizeof(stAdcRunningParamTdf));
     
-    // 判断ADC模式
-    ADC_HandleTypeDef *hadc = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
-    #if ADC_IS_USE_DMA
-        DMA_HandleTypeDef *hdma = astAdcDeviceParam[emDevNum].stStaticParam.pstDmaHandle;
-    #endif
-    
+    stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
     stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
-    
-    /* 对齐模式 */
-    pstRunning->ulDataAlign = hadc->Init.DataAlign;
-    
-    /* 是否连续转换 */
-    pstRunning->emContinuousState = hadc->Init.ContinuousConvMode;
-    pstRunning->emDisContinuousState = hadc->Init.DiscontinuousConvMode;
-    
-    /* 扫描模式 */
-    pstRunning->ulScanConvMode = hadc->Init.ScanConvMode;
-    
-    /* 扫描通道数 */
-    pstRunning->ulConversionNumber = hadc->Init.NbrOfConversion;
-    
-    #if ADC_IS_USE_DMA
-        /* DMA模式 (NORMAL/CIRCULAR) */
-        pstRunning->ulDmaInitMode = hdma->Init.Mode;
+
+    #if (QEPACK_PLATFORM == ST)
+        
+        // 判断ADC模式
+        ADC_HandleTypeDef *hadc = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
+
+        #if ADC_IS_USE_DMA
+            DMA_HandleTypeDef *hdma = astAdcDeviceParam[emDevNum].stStaticParam.pstDmaHandle;
+        #endif
+        
+        /* 对齐模式 */
+        pstRunning->ulDataAlign = hadc->Init.DataAlign;
+        
+        /* 是否连续转换 */
+        pstRunning->emContinuousState = hadc->Init.ContinuousConvMode;
+        pstRunning->emDisContinuousState = hadc->Init.DiscontinuousConvMode;
+        
+        /* 扫描模式 */
+        pstRunning->ulScanConvMode = hadc->Init.ScanConvMode;
+        
+        /* 扫描通道数 */
+        pstRunning->ulConversionNumber = hadc->Init.NbrOfConversion;
+        
+        #if ADC_IS_USE_DMA
+            /* DMA模式 (NORMAL/CIRCULAR) */
+            pstRunning->ulDmaInitMode = hdma->Init.Mode;
+        #endif
+
+    #else
+        #if ADC_IS_USE_DMA
+
+            /* Configure DMA source, destination and size */
+            DL_DMA_setSrcAddr(DMA, DMA_CH0_CHAN_ID,
+                (uint32_t) DL_ADC12_getFIFOAddress(pstStatic->pstAdcBase->adc_inst));
+
+            DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t) &pstStatic->pulDmaBuffer[0]);
+
+        #endif
+
+        /*
+        * Check the ADC started converting in single channel repeat mode.
+        * Once the ADC is triggered, the ADC will keep sampling until 1024
+        * samples are captured, regardless of conversion been stopped.
+        * 即防止sysconfig中设置成了重复采样模式，因为我们是手动采样的
+        */
+        if (DL_ADC12_STATUS_CONVERSION_ACTIVE ==
+            DL_ADC12_getStatus(ADC12_0_INST)) {
+            DL_ADC12_stopConversion(ADC12_0_INST);
+        }
+            
+        /* 使能 ADC12_0 的中断请求 */
+        NVIC_EnableIRQ(pstStatic->pstAdcBase->adc_irqn);
     #endif
     
 //    // 启动DMA转换
@@ -74,35 +106,41 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
 /// @note       需提前初始化DMA缓存和缓存长度
 
 #if ADC_IS_USE_DMA
-/**
- * @brief 启动DMA连续转换
- * @param emDevNum 设备号
- */
-void vAdcStart(emAdcDevNumTdf emDevNum)
-{
-
-//    stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
-    stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
-    
-
-    if(pstStatic->pulDmaBuffer == NULL || pstStatic->usDmaBufLen == 0 || pstStatic->pstDmaHandle == NULL)
-        return;
-
-    
-    // 校准
-    HAL_ADCEx_Calibration_Start(astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase);
-
-    if (HAL_ADC_Start_DMA(
-        astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase,
-        (uint32_t *)pstStatic->pulDmaBuffer,
-        pstStatic->usDmaBufLen
-    ) != HAL_OK)
+    /**
+    * @brief 启动DMA连续转换
+    * @param emDevNum 设备号
+    */
+    void vAdcStart(emAdcDevNumTdf emDevNum)
     {
-        Error_Handler();
-    }
 
-    
-}
+    //    stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+        stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+        
+
+        if(pstStatic->pulDmaBuffer == NULL || pstStatic->usDmaBufLen == 0)
+            return;
+
+        #if (QEPACK_PLATFORM == ST)
+            // 校准
+            HAL_ADCEx_Calibration_Start(astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase);
+
+            if (HAL_ADC_Start_DMA(
+                astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase,
+                (uint32_t *)pstStatic->pulDmaBuffer,
+                pstStatic->usDmaBufLen
+            ) != HAL_OK)
+            {
+                Error_Handler();
+            }
+
+        #else
+            TI_ADC_Start_DMA(
+                pstStatic->pstAdcBase,
+                (uint32_t *)pstStatic->pulDmaBuffer,
+                pstStatic->ulConversionNumber
+            );
+        #endif
+    }
 
 #else
 
@@ -111,17 +149,24 @@ void vAdcStart(emAdcDevNumTdf emDevNum)
  * @param emDevNum 设备号
  * @param Channel 通道号
  */
-void vAdcStart(emAdcDevNumTdf emDevNum, uint32_t Channel){
+void vAdcStart(emAdcDevNumTdf emDevNum, DL_ADC12_MEM_IDX Channel){
     stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
-    
-    sConfig.Channel = Channel;                                         /* 通道 */
-	sConfig.Rank = ADC_REGULAR_RANK_1;                              
-	sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;                  /* 采样时间 */
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)             
-	{
-		Error_Handler();
-	}
-    HAL_ADC_Start(pstStatic->pstAdcBase);
+
+    #if (QEPACK_PLATFORM == ST)
+        sConfig.Channel = Channel;                                         /* 通道 */
+        sConfig.Rank = ADC_REGULAR_RANK_1;                              
+        sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;                  /* 采样时间 */
+        if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK){
+            Error_Handler();
+        }
+        HAL_ADC_Start(pstStatic->pstAdcBase);
+    #else
+        /* 触发 ADC12_0 一次ADC转换 */
+        DL_ADC12_startConversion(pstStatic->pstAdcBase->adc_inst);
+
+        /* 重新使能 ADC 转换（针对单次触发模式，通常需要重新使能才能响应下一次启动信号） */
+        DL_ADC12_enableConversions(pstStatic->pstAdcBase->adc_inst); 
+    #endif
 }
 
 #endif
@@ -149,9 +194,14 @@ float fADCConvertToResult(
     * @param emDevNum 设备号
     * @return uint16_t* DMA转换值指针
     */
-    uint16_t* vADCGetValue(emAdcDevNumTdf emDevNum){
-            stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
-            return pstStatic->pulDmaBuffer;
+    uint16_t* pstADCGetValue(emAdcDevNumTdf emDevNum){
+        #if (QEPACK_PLATFORM == TI)
+            DL_ADC12_disableConversions(ADC12_0_INST);
+            DL_ADC12_enableConversions(ADC12_0_INST);
+        #endif
+        
+        stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+        return pstStatic->pulDmaBuffer;
     }
 #else
     /**
@@ -160,12 +210,21 @@ float fADCConvertToResult(
     * @return uint16_t 单次转换值
     */
     uint16_t usADCGetValue(emAdcDevNumTdf emDevNum){
-        ADC_HandleTypeDef* pstAdcBase = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
-        
-        // 停止当前转换
-//        HAL_ADC_Stop(pstAdcBase);
-        
-        return (uint16_t)HAL_ADC_GetValue(pstAdcBase);
+        #if (QEPACK_PLATFORM == ST)
+            ADC_HandleTypeDef* pstAdcBase = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
+            // 停止当前转换
+            // HAL_ADC_Stop(pstAdcBase);
+            return (uint16_t)HAL_ADC_GetValue(pstAdcBase);
+        #else
+            stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+            stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+            
+            /* 转换完成，读取转换结果 */
+            return (uint16_t)DL_ADC12_getMemResult(
+                pstStatic->pstAdcBase->adc_inst,
+                pstStatic->pstAdcBase->adc_mem_idx
+            );
+        #endif
     }
 #endif
 
@@ -176,12 +235,12 @@ float fADCConvertToResult(
  */
 emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
 #if ADC_IS_USE_DMA
-    emAdcDataStateTdf result;
-    result = astAdcDeviceParam[emDevNum].stRunningParam.ucDmaDataState;
+    emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.emDataState;
 
     if(result == UPDATED){
-        astAdcDeviceParam[emDevNum].stRunningParam.ucDmaDataState = NOT_UPDATE;
+        astAdcDeviceParam[emDevNum].stRunningParam.emDataState = NOT_UPDATE;
     }
+
     return result;
 #else
 //  //废弃的方案
@@ -192,7 +251,17 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
 //          ),
 //          HAL_ADC_STATE_REG_EOC
 //      );
-    return UPDATED;
+    #if (QEPACK_PLATFORM == ST)
+        return UPDATED; // 为什么要直接返回UPDATED呢...
+    #else
+        emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.emDataState;
+
+        if(result == UPDATED){
+            astAdcDeviceParam[emDevNum].stRunningParam.emDataState = NOT_UPDATE;
+        }
+        
+        return result;
+    #endif
 #endif
 }
 
@@ -201,18 +270,83 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
  * @brief ADC DMA传输完成回调函数
  * @param hadc ADC句柄
  */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-    emAdcDevNumTdf i;
-    // 匹配句柄后更新标志
-    for(i = emAdcDevNum0; i < ADC_DEV_NUM; i++)
+#if (QEPACK_PLATFORM == ST)
+    void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
     {
-        if(astAdcDeviceParam[i].stStaticParam.pstAdcBase == hadc)
+        emAdcDevNumTdf i;
+        // 匹配句柄后更新标志
+        for(i = emAdcDevNum0; i < ADC_DEV_NUM; i++)
         {
-            astAdcDeviceParam[i].stRunningParam.ucDmaDataState = UPDATED;
-            break;
+            if(astAdcDeviceParam[i].stStaticParam.pstAdcBase == hadc)
+            {
+                astAdcDeviceParam[i].stRunningParam.ucDmaDataState = UPDATED;
+                break;
+            }
         }
     }
-}
+#else
+    
+#endif
+
+#if (QEPACK_PLATFORM == TI)
+    emAdcDevNumTdf emCheckCallbackBelong(ADC12_Regs* stReg){
+        for(emAdcDevNumTdf i = emAdcDevNum0; i < ADC_DEV_NUM; i++){
+            if(astAdcDeviceParam[i].stStaticParam.pstAdcBase->adc_inst == stReg){
+                return (emAdcDevNumTdf)i;
+            }
+        }
+        return 0;
+    }
+    
+    /** 以MSPM0G3507为例，只能开两个ADC，故只适配两个对应的回调函数 */
+    void ADC0_IRQHandler(void){
+        emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC0);
+        stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+        switch (DL_ADC12_getPendingInterrupt(ADC0)) {
+            case DL_ADC12_IIDX_DMA_DONE:
+            case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM1_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM2_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM3_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM4_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM5_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM6_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM7_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM8_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM9_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM10_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM11_RESULT_LOADED:
+                pstRunning->emDataState = UPDATED;
+                break;
+            default:
+                break;
+        }
+    }
+
+    void ADC1_IRQHandler(void){
+        emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC1);
+        stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
+        switch (DL_ADC12_getPendingInterrupt(ADC1)) {
+            case DL_ADC12_IIDX_DMA_DONE:
+            case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM1_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM2_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM3_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM4_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM5_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM6_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM7_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM8_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM9_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM10_RESULT_LOADED:
+            case DL_ADC12_IIDX_MEM11_RESULT_LOADED:
+                pstRunning->emDataState = UPDATED;
+                break;
+            default:
+                break;
+        }
+    }
+
+#endif
 
 #endif

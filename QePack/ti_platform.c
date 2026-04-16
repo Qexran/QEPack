@@ -194,6 +194,41 @@ void TI_UART_Transmit(
     }
 }
 
+/**
+    函数原型:
+    HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout)
+*/
+void TI_ADC_PollForConversion(
+    stAdcTdf *adc_inst, uint32_t Timeout
+){
+    unsigned long start, cur;
+    
+    mspm0_get_clock_ms(&start);
+    
+    while (1){
+        
+        mspm0_get_clock_ms(&cur);
+        if(cur >= (start + Timeout))
+        {
+            // 超时
+            
+            break;
+        }
+    }
+}
+
+/**
+    函数原型:
+    HAL_StatusTypeDef HAL_ADC_Start_DMA(
+        ADC_HandleTypeDef* hadc, uint32_t* pData, uint32_t Length)
+*/
+void TI_ADC_Start_DMA(stAdcTdf *pstAdcBase, uint32_t *pData, uint32_t Length){
+    DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, (1024 * Length) >> 1);
+
+    DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+    DL_ADC12_enableDMA(pstAdcBase->adc_inst);
+    DL_ADC12_startConversion(pstAdcBase->adc_inst);
+}
 
 
 /**
@@ -204,5 +239,6 @@ uint32_t TI_GetTick(void)
 {
     return tick_ms;
 }
+
 
 #endif

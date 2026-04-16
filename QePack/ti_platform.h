@@ -37,7 +37,7 @@ typedef struct {
 
 typedef struct {
     UART_Regs     *uart_inst;          // UART 模块寄存器基地址
-    uint32_t      int_irqn;             // UART 中断向量号
+    uint32_t      int_irqn;            // UART 中断向量号
 } stUartTdf;
 
 typedef struct {    /** 注意：若config里没有对应的变量，则不填写该字段 */
@@ -45,6 +45,17 @@ typedef struct {    /** 注意：若config里没有对应的变量，则不填�
     uint32_t        clk_freq;             // 定时器时钟频率（Hz）
     IRQn_Type       timer_irqn;           // 定时器中断向量号
 } stTimerTdf;
+
+typedef struct {
+    ADC12_Regs          *adc_inst;           // ADC 模块寄存器基地址
+    DL_ADC12_MEM_IDX    adc_mem_idx;         // ADC 内存索引
+    float               voltage;             // ADC 参考电压（V）
+    IRQn_Type           adc_irqn;            // ADC 中断向量号
+} stAdcTdf;
+
+typedef struct {
+    // TODO 定义DMA句柄
+} stAdcDmaTdf;
 
 typedef void (*vI2CInitFunc)(void);
 void SysTick_Init(void);
@@ -66,6 +77,9 @@ void TI_UART_Transmit(
 GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);
 
 void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinState);
+
+void TI_ADC_Start_DMA(stAdcTdf *pstAdcBase, uint32_t *pData, uint32_t Length);
+
 #endif
 
 #endif

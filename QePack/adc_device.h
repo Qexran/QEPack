@@ -9,16 +9,18 @@
   
 
 #include "project_config.h"
-#if ADC_MOD_IS_ENABLE
+#if ADC_DEVICE_IS_ENABLE
 
 #ifndef _ADC_DEVICE_H_
 #define _ADC_DEVICE_H_
 
 #include "string.h"
-#include "adc.h"
+
+#if (QEPACK_PLATFORM == ST)
+    #include "adc.h"
+#endif
 
 #if ADC_IS_USE_DMA
-    #include "stm32f1xx_hal_dma.h"
 #endif
 
 /// @brief          ADC设备号枚举
@@ -44,12 +46,19 @@ emAdcDataStateTdf;
 /// @note           包含ADC外设、通道、采样时间、DMA句柄等固定参数
 typedef struct
 {
-    ADC_HandleTypeDef       *pstAdcBase;                // ADC外设基地址（如ADC1/ADC2）
+    #if (QEPACK_PLATFORM == ST)             // ADC句柄
+        ADC_HandleTypeDef       *pstAdcBase; 
+    #else
+        stAdcTdf                *pstAdcBase;
+        uint32_t                ulConversionNumber;             // 扫描通道数
+    #endif
     
     #if ADC_IS_USE_DMA
         uint16_t                *pulDmaBuffer;              // DMA缓存地址
         uint16_t                usDmaBufLen;                // DMA缓存长度（计算方式: 通道数 X 采样数）
-        DMA_HandleTypeDef       *pstDmaHandle;         // DMA句柄
+        #if (QEPACK_PLATFORM == ST)
+            DMA_HandleTypeDef       *pstDmaHandle;              // DMA句柄
+        #endif
     #endif
 }
 stAdcStaticParamTdf;
@@ -59,19 +68,26 @@ stAdcStaticParamTdf;
 typedef struct
 {
     uint32_t            ulCurrentValue;                 // 单次转换当前值
-    emAdcDataStateTdf   ucDmaDataState;                 // DMA数据更新标志
-    FunctionalState     emContinuousState;              // 连续转换状态
-    FunctionalState     emDisContinuousState;           // 非连续转换状态
-    uint32_t            ulScanConvMode;                 // 扫描模式
-    uint32_t            ulConversionNumber;             // 扫描通道数
-    uint32_t            ulDataAlign;                    // 对齐模式
-    uint32_t            ulDmaInitMode;                  // DMA模式
-    uint8_t             isContinousRunning;             // 连续模式正在运行
+
+
+    #if (QEPACK_PLATFORM == ST)
+        FunctionalState     emContinuousState;              // 连续转换状态
+        FunctionalState     emDisContinuousState;           // 非连续转换状态
+        uint32_t            ulScanConvMode;                 // 扫描模式
+        uint32_t            ulConversionNumber;             // 扫描通道数
+        uint32_t            ulDataAlign;                    // 对齐模式
+        uint32_t            ulDmaInitMode;                  // DMA模式
+        emAdcDataStateTdf   ucDmaDataState;                 // DMA数据更新标志
+        uint8_t             isContinousRunning;             // 连续模式正在运行
+    #else
+        volatile emAdcDataStateTdf   emDataState;                    // DMA数据更新标志
+        volatile DL_ADC12_MEM_IDX    emCurrentConvertChannel;        // 当前正在转换的通道
+    #endif    
+
 }
 stAdcRunningParamTdf;
 
-/// @brief          ADC设备参数总结构体
-/// @note           整合静态参数和运行参数
+/// @brief/// @note           整合静态参数和运行参数
 typedef struct
 {
     stAdcStaticParamTdf     stStaticParam;  // 静态参数
@@ -82,7 +98,7 @@ stAdcDeviceParamTdf;
 /* 获取ADC设备参数 */
 const stAdcDeviceParamTdf *c_pstGetAdcDeviceParam(emAdcDevNumTdf emDevNum);
 #if ADC_IS_USE_DMA                                                              // 获取原始结果
-    uint16_t* vADCGetValue(emAdcDevNumTdf emDevNum);
+    uint16_t* pstADCGetValue(emAdcDevNumTdf emDevNum);
 #else
     uint16_t  usADCGetValue(emAdcDevNumTdf emDevNum);
 #endif
@@ -99,7 +115,12 @@ float fADCConvertToResult(                                                   // 
 #if ADC_IS_USE_DMA
     void vAdcStart(emAdcDevNumTdf emDevNum);                                     // 启动DMA连续转换
 #else
-    void vAdcStart(emAdcDevNumTdf emDevNum, uint32_t Channel);                   // 对特定通道转换
+    #if (QEPACK_PLATFORM == ST)                   // 对特定通道转换
+        void vAdcStart(emAdcDevNumTdf emDevNum, uint32_t Channel);
+    #else
+        void vAdcStart(emAdcDevNumTdf emDevNum, DL_ADC12_MEM_IDX Channel);
+    #endif
+    
 #endif
 
 emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum);

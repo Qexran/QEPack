@@ -26,7 +26,11 @@
 #endif
 
 #define PI					3.141592653					// PI值
-#define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
+#if (QEPACK_PLATFORM == ST)
+  #define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
+#else
+  #define SYSTEM_CORE_CLOCK CPUCLK_FREQ
+#endif
 /* ########################### Device Section ############################### */
 
 /* LED 相关 */
@@ -94,7 +98,7 @@
 #define SERVO1                                          emServoDevNum1
 
 /* ADC 相关 */
-#define ADC_MOD_IS_ENABLE							    0								// ADC 模块总开关
+#define ADC_DEVICE_IS_ENABLE							    1								// ADC 模块总开关
 #define ADC_IS_USE_DMA                                  1                               // ADC 是否使用DMA功能
 #define ADC_RESOLUTION                                  4095                            // ADC 精度(12位: 2^12 - 1)
 #define ADC_VREF                                        3.3                             // ADC 电压
@@ -110,6 +114,11 @@
 #define ENCODER_HANDLE_PLAN                             GPIO                             // 编码器处理方案 (TIM/GPIO)
 #define ENCODER_DEV_NUM    							      1							    // 编码器 数量
 #define ENCODER_0                                       emEncoderDevNum0
+
+/* 线性CCD 相关 */
+#define LINEAR_CCD_IS_ENABLE                            1                               // 线性CCD 模块总开关
+#define LINER_CCD_DEV_NUM                               1                               // 线性CCD 设备数量
+#define LINER_CCD0                                      emLinerCcdDevNum0
 
 /* PID 相关 */
 #define PID_IS_ENABLE                                   0                               // PID 模块总开关
@@ -138,6 +147,12 @@
 #define W25Q64_PAGE_SIZE                                256                             // W25Q64 页大小（256B）
 #define W25Q64_TOTAL_SIZE                               (8 * 1024 * 1024)             // W25Q64 总容量（8MB）
 #define W25Q640                                         emW25q64DevNum0
+
+/** QMC5883 相关 */
+#define QMC_IS_ENABLE                                   0                               // QMC5883 模块总开关
+#define QMC_DEV_NUM                                     1                               // QMC5883 设备数量
+#define QMC0                                            emQmcDevNum0
+
 
 /* Timer Controller 相关 */
 #define TIMER_CONTROLLER_IS_ENABLE                      1                               // Timer Controller 模块总开关

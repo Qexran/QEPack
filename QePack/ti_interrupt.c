@@ -4,14 +4,7 @@
 
 #include "ti_clock.h"
 
-/**
- * @brief SysTick处理函数
- * 
- */
-void SysTick_Handler(void)
-{
-    tick_ms++;
-}
+
 
 
 // 在此处填写 1MS定时器 实例名 (只能定义一次)

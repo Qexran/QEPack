@@ -13,6 +13,10 @@ void Interrupt_Init(void);
     #include "uart_device.h"
 #endif
 
+#if LINEAR_CCD_IS_ENABLE
+    #include "linear_ccd_device.h"
+#endif
+
 /**
  * @brief 定时器中断处理函数模板宏
  * @param TIMER_NAME: 定时器实例名
@@ -86,6 +90,23 @@ void Interrupt_Init(void);
                     break;                                        \
             }                                                                                                    \
         }      
+
+/* ADC12_0 的中断服务程序 (IRQ Handler) */
+/* 当 ADC 产生中断时，CPU 会自动跳转到此函数执行 */
+#define CREATE_ADC12_0_IRQ_HANDLER(ADC_NAME, emDevNum)                                  \
+    void ADC_NAME##_INST_IRQHandler(void){                                              \
+            /* 检查是哪种 ADC 中断源触发了中断 */                                           \
+            switch (DL_ADC12_getPendingInterrupt(ADC_NAME##_INST)) {                             \
+                /* 当 MEM0 (内存索引0) 的结果加载完成时触发 */                             \
+                case DL_ADC12_IIDX_MEM0_RESULT_LOADED:                                  \
+                    /* 设置全局标志位，通知主循环 ADC 转换已完成 */                       \
+                    vSetAdcConvertFlag(emDevNum, true);                                  \
+                    break;                                                        \
+                default:                                                          \
+                    /* 处理其他未定义的中断情况（此处为空） */                        \
+                    break;                                                        \
+            }                                                                   \
+        }
 
 // void COMPARE_0_INST_IRQHandler(void) 
 // {
