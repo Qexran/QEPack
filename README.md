@@ -1,5 +1,8 @@
 # QEPack - 像CubeMX一样使用模块
 
+![STM32](https://img.shields.io/badge/STMicroelectronics-000000?style=for-the-badge&logo=stmicroelectronics&logoColor=white)
+![TI](https://img.shields.io/badge/TexasInstruments-000000?style=for-the-badge&logo=texasinstruments&logoColor=red)
+
 ## 🚀 拓展包特点
 - **面向对象**：所有抽象模块均采用面向对象设计模式
 - **易扩展**：模块化设计，支持相互继承模块
