@@ -1,7 +1,7 @@
 # QEPack - 像CubeMX一样使用模块
 
-[![TI](https://img.shields.io/badge/Texas_Instruments-000000?style=for-the-badge&logo=texasinstruments&logoColor=white)](https://www.ti.com/)
 [![ST](https://img.shields.io/badge/STMicroelectronics-03234B?style=for-the-badge&logo=stmicroelectronics&logoColor=white)](https://www.st.com/)
+[![TI](https://img.shields.io/badge/Texas_Instruments-e61f19?style=for-the-badge&logo=texasinstruments&logoColor=white)](https://www.ti.com/)
 
 ## 🚀 拓展包特点
 - **面向对象**：所有抽象模块均采用面向对象设计模式
