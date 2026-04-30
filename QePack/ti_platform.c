@@ -180,13 +180,11 @@ TI_StatusTypeDef TI_UART_Transmit(
                 mspm0_get_clock_ms(&cur);
 
                 if ((cur - start) >= Timeout) {
-                    // === 超时处理 ===
                     return TI_TIMEOUT; 
                 }
                 
             }
         }
-        // 如果 txSuccess 为 true，说明数据已写入，继续循环发送下一个字节
     }
 
     return TI_OK;
