@@ -39,7 +39,13 @@ void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
 	stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 	stUartStaticParamTdf  *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
 	
-	
+	if(pstInit->emFrameEn == emUartFrameOff){
+        pstInit->pucFrameHead   = NULL;
+        pstInit->pucFrameTail   = NULL;
+        pstInit->ucFrameHeadLen = 0;
+        pstInit->ucFrameTailLen = 0;
+    }
+    
     memcpy(pstStatic, pstInit, sizeof(stUartStaticParamTdf));
     
     // 默认初始化运行参数
@@ -49,8 +55,8 @@ void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
 	
 	/* 初始化缓冲区 */
 	memset(&pstRunning->stUartTempBuffer, 0, sizeof(pstRunning->stUartTempBuffer));
-	
 
+    
 	
 	/* 启动串口接收中断 */
 	#if UART_IS_USE_DMA
@@ -390,7 +396,7 @@ void vUartSendFrame(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
 {
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
     
-    if(pstStatic->emFrameEn == 0 || pucData == NULL || ulLen == 0)
+    if(pstStatic->emFrameEn == emUartFrameOff || pucData == NULL || ulLen == 0)
     {
         return;
     }
@@ -428,7 +434,7 @@ static void vUartParseFrame_DMA(emUartDevNumTdf emDevNum, uint8_t *pucBatchBuf, 
     stUartRunningParamTdf *pstRunning = &pstDev->stRunningParam;
     
     // 1. 检查帧功能是否使能，帧头/帧尾是否有效
-    if(pstStatic->emFrameEn == 0 || pstStatic->pucFrameHead == NULL || pstStatic->ucFrameHeadLen == 0)
+    if(pstStatic->emFrameEn == emUartFrameOff || pstStatic->pucFrameHead == NULL || pstStatic->ucFrameHeadLen == 0)
     {
         return;
     }
@@ -677,7 +683,7 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
         uint8_t ucData = ucUartReceiveByte(emDevNum);
         
         // 启用帧功能时解析帧，否则直接存入接收缓存
-        if(pstStatic->emFrameEn == 1)
+        if(pstStatic->emFrameEn == emUartFrameOn)
         {
             vUartParseFrame(emDevNum, ucData);
         }
@@ -803,7 +809,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
         // 分两种场景处理有效数据：
         // 场景1：启用帧功能，直接批量解析帧数据
-        if(pstStatic->emFrameEn == 1)
+        if(pstStatic->emFrameEn == emUartFrameOn)
         {
            vUartParseFrame_DMA((emUartDevNumTdf)i, pstRunning->stUartTempBuffer.buffer, Size);
         }

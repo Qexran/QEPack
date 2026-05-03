@@ -2,7 +2,7 @@
  * @file    linear_ccd_device.h
  * @author  Qe_xr
  * @version V1.0.0
- * @date    2026/03/12
+ * @date    2026/4/18
  * @brief   线性CCD设备驱动模块，实现线性CCD的数据采集、阈值处理和中线检测功能。
  */
  
@@ -16,8 +16,6 @@
 #include "delay.h"
 
 #include "adc_device.h"
-
-#include <stdlib.h>
 
 #if (QEPACK_PLATFORM == ST)
     #include "adc.h"
@@ -119,3 +117,47 @@ void vLinerCcdSendToPc(emLinerCcdDevNumTdf emDevNum);
 
 #endif
 #endif
+
+/*
+    // 初始化ADC设备
+    uint16_t dmabuffer[2];
+    stAdcStaticParamTdf stAdcInit = {
+        .pstAdcBase = &TI_GET_ADC_STRUCTURE(ADC12_0),
+        .ulConversionNumber = 1,
+        // .pulDmaBuffer = dmabuffer,
+        // .usDmaBufLen = 2
+    };
+
+    vAdcDeviceInit(&stAdcInit, ADC_0);
+
+    // 初始化CCD设备
+    stLinerCcdStaticParamTdf stCCDInit = {
+        .huart = &TI_GET_UART_STRUCTURE(UART_0),
+        .emAdcChannel = ADC_CHANNEL_0,
+        .emAdcDevNum = ADC_0,
+        .pstClkGpioPort = LINER_CCD_PORT,
+        .usClkGpioPin = LINER_CCD_CLK_PIN,
+        .pstSiGpioPort = LINER_CCD_PORT,
+        .usSiGpioPin = LINER_CCD_SI_PIN
+    };
+
+    vLinerCcdDeviceInit(&stCCDInit, LINER_CCD0);
+
+    // CCD
+    // 1. 从设备采集数据
+    if(vLinerCcdReadData(LINER_CCD0) != TI_OK) while(1);
+    // 2. 计算黑白阈值
+    if(vLinerCcdCalculateThreshold(LINER_CCD0) == TI_OK)
+        vOledPrintf(
+            OLED0, 1, 1, OLED_8X16, "b/w = %d  ", 
+            usLinerCcdGetThreshold(LINER_CCD0)
+        );  
+    // 3. 计算中线位置
+    if(vLinerCcdFindCenterLine(LINER_CCD0) == TI_OK)
+        vOledPrintf(
+            OLED0, 1, 16, OLED_8X16, "center = %d  ", 
+            sLinerCcdGetCenterLine(LINER_CCD0)
+        );  
+    // 4. 发送到上位机
+    vLinerCcdSendToPc(LINER_CCD0);
+*/

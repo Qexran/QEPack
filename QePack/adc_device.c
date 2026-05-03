@@ -1,5 +1,5 @@
 /**
-  * @file       adc_device.h
+  * @file       adc_device.c
   * @author     Qe_xr
   * @version    V1.0.0
   * @date       2026/2/17

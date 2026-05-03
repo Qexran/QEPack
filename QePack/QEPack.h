@@ -4,6 +4,7 @@
 #include                    "it_controller.h"           // 中断管理器
 #include                    "ti_interrupt.h"
 #include                    "ti_hardfault_helper.h"
+#include                    "arithmetic.h"
 
 #if LINEAR_CCD_IS_ENABLE
     #include "linear_ccd_device.h"
@@ -21,8 +22,8 @@
     #include "uart_device.h"
 #endif
 
-#if MOTOR_IS_ENABLE
-    #include "motor_device.h"
+#if GEAR_MOTOR_IS_ENABLE
+    #include "gear_motor_device.h"
 #endif
 
 #if TIMER_IS_ENABLE
@@ -38,7 +39,7 @@
 #endif
 
 #if PID_IS_ENABLE
-    #include "pid_device.h"
+    #include "pid_controller.h"
 #endif
 
 #if MPU6050_IS_ENABLE
@@ -49,8 +50,8 @@
     #include "atk_ms901m_device.h"
 #endif
 
-#if EMM_V5_IS_ENABLE
-    #include "em_v5_device.h"
+#if EMM_MOTOR_IS_ENABLE
+    #include "emm_step_motor_device.h"
 #endif
 
 #if W25Q64_IS_ENABLE

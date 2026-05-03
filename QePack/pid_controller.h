@@ -22,6 +22,7 @@ typedef enum {
     emPidDevNum1,
     emPidDevNum2,
     emPidDevNum3,
+    emNoPid = 0xFF,
 } emPidDevNumTdf;
 
 /** @brief PID计算模式枚举 */

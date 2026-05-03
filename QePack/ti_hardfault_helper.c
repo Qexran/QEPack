@@ -1,5 +1,7 @@
 #include "ti_hardfault_helper.h"
 
+#if IS_DEBUG_MODE
+
 void NMI_Handler(void)
 {
     __BKPT();
@@ -72,10 +74,10 @@ void SPI1_IRQHandler(void)
     __BKPT();
 }
 
-void UART1_IRQHandler(void)
-{
-    __BKPT();
-}
+// void UART1_IRQHandler(void)
+// {
+//     __BKPT();
+// }
 
 void UART2_IRQHandler(void)
 {
@@ -149,3 +151,5 @@ void DMA_IRQHandler(void)
 // {
 //     __BKPT();
 // }
+
+#endif

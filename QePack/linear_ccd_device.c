@@ -2,7 +2,7 @@
  * @file    linear_ccd_device.c
  * @author  Qe_xr
  * @version V1.0.0
- * @date    2026/03/12
+ * @date    2026/4/18
  * @brief   线性CCD设备驱动模块实现
  */
 #include "linear_ccd_device.h"
@@ -85,7 +85,7 @@ static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
         sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
         if (HAL_ADC_ConfigChannel(pstStatic->hadc, &sConfig) == HAL_OK) {
             HAL_ADC_Start(pstStatic->hadc);
-            HAL_ADC_PollForConversion(pstStatic->hadc, 10);
+            HAL_ADC_PollForConversion(pstStatic->hadc, 200);
             pstRunning->adcValue = HAL_ADC_GetValue(pstStatic->hadc);
             HAL_ADC_Stop(pstStatic->hadc);
         }
@@ -102,7 +102,7 @@ static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
             vAdcStart(pstStatic->emAdcDevNum, pstStatic->emAdcChannel);
         #endif
         
-        if(TI_ADC_PollForConversion(pstStatic->emAdcDevNum, 10)){
+        if(TI_ADC_PollForConversion(pstStatic->emAdcDevNum, TI_MAX_DELAY) == TI_OK){
             #if ADC_IS_USE_DMA
                 
                 uint16_t *result = pstADCGetValue(pstStatic->emAdcDevNum);
@@ -314,6 +314,9 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
 }
 
 #if LINER_CCD_IS_DEBUG_MODE
+    // 仅在测试阶段需要用到SciBuf
+    uint8_t SciBuf[200] = {0};
+
     /**
     * @brief 发送数据到上位机
     * @param emDevNum 设备号
@@ -325,23 +328,24 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
         stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
         stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
         
-        #if (QEPACK_PLATFORM == ST)
-            uint8_t header = 0xFF;
-            HAL_UART_Transmit(pstStatic->huart, &header, 1, 100);
-            for (uint8_t i = 0; i < 128; i++) {
-                uint8_t data = (uint8_t)pstRunning->ausPixelData[i];
-                if (data == 0xFF) data--;
-                HAL_UART_Transmit(pstStatic->huart, &data, 1, 10);
-            }
-        #else
-            uint8_t header = 0xFF;
-            TI_UART_Transmit(pstStatic->huart, &header, 1, 100);
-            for (uint8_t i = 0; i < 128; i++) {
-                uint8_t data = (uint8_t)pstRunning->ausPixelData[i];
-                if (data == 0xFF) data--;
-                TI_UART_Transmit(pstStatic->huart, &data, 1, 10);
-            }
-        #endif
+        SciBuf[0] = 0; 
+        SciBuf[1] = 132;
+        SciBuf[2] = 0; 
+        SciBuf[3] = 0;
+        SciBuf[4] = 0;
+        SciBuf[5] = 0; 
+        for(uint8_t i=0;i<128;i++)
+			SciBuf[6+i] = pstRunning->ausPixelData[i];
+        
+        vUartPrintf(UART_DEVICE_0, "*LD");
+
+        for (uint8_t i = 2; i < 134; i++) {
+            vUartSendByte(UART_DEVICE_0, ucBinToHexHigh(SciBuf[i]));
+            vUartSendByte(UART_DEVICE_0, ucBinToHexLow(SciBuf[i]));
+            // __BKPT();
+        }
+
+        vUartPrintf(UART_DEVICE_0, "00#");
     }
 #endif
 

@@ -13,7 +13,7 @@
 #define _LED_DEVICE_H_
 
 #include "string.h"
-#include "math.h"
+#include "arithmetic.h"
 
 /**
  * @brief          设备号枚举

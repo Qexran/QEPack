@@ -1,103 +1,110 @@
 /**
   * @file       motor_device.c
   * @author     Qe_xr
-  * @version    V1.0.2
-  * @date       2026/2/11
-  * @brief      电机控制驱动，基于 STM32 HAL 库
+  * @version    V1.1.0
+  * @date       2026/4/27
+  * @brief      电机控制基类实现
   */
 
 #include "motor_device.h"
 
 #if MOTOR_IS_ENABLE
 
-stMotorDeviceParamTdf astMotorDeviceParam[MOTOR_DEV_NUM];
+/* 全局电机设备指针数组 */
+stMotorDeviceTdf *g_astMotorDevices[emMotorDevMax];
 
 /**
- * @brief 初始化电机静态参数
- * @param pstInit 电机静态参数指针
- * @param emDevNum 电机设备号
+ * @brief          注册电机设备
+ * @param  emDevNum ：电机设备号
+ * @param  pstMotor ：电机设备指针（包含基类成员）
  */
-void vMotorDeviceInit(stMotorStaticParamTdf *pstInit, emMotorDevNumTdf emDevNum)
+void vMotorRegisterDevice(uint8_t emDevNum, stMotorDeviceTdf *pstMotor)
 {
-    if (emDevNum >= MOTOR_DEV_NUM || pstInit == NULL) {
-        return;
+    if (emDevNum < emMotorDevMax && pstMotor != NULL) {
+        g_astMotorDevices[emDevNum] = pstMotor;
     }
-    
-    memcpy(&astMotorDeviceParam[emDevNum].stStaticParam, 
-           pstInit, 
-           sizeof(stMotorStaticParamTdf));
-    
-    memset(&astMotorDeviceParam[emDevNum].stRunningParam, 
-           0, 
-           sizeof(stMotorRunningParamTdf));
-    
-
-    // 启动电机定时器
-    #if (QEPACK_PLATFORM == TI)
-        DL_Timer_startCounter(
-            astMotorDeviceParam[emDevNum].stStaticParam.stTimer->timer_inst
-        );
-    #else
-        if (
-            HAL_TIM_PWM_Start(
-                astMotorDeviceParam[emDevNum].stStaticParam.pstPWM_htim, 
-                pstInit->u32PWM_Channel
-            ) 
-            != HAL_OK) {
-            while(1);
-        }
-    #endif
 }
 
 /**
- * @brief 通过PWM占空比来设置电机速度
- * @param emDevNum 电机设备号
- * @param speed 电机速度，单位：PWM占空比
+ * @brief          电机初始化
+ * @param  emDevNum ：电机设备号
  */
-void vMotorSetSpeed_by_PWM(emMotorDevNumTdf emDevNum, int16_t speed)
+void vMotorInit(uint8_t emDevNum)
 {
-    if (emDevNum >= MOTOR_DEV_NUM) {
-        return;
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vInit != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vInit((void*)g_astMotorDevices[emDevNum]);
+        }
     }
-    
-    stMotorStaticParamTdf *pstStatic = &astMotorDeviceParam[emDevNum].stStaticParam;
-    
-    uint16_t absSpeed = (speed < 0) ? -speed : speed;
-    
-    // 控制电机方向
-    #if (QEPACK_PLATFORM == TI)
-        if (speed > 0) {
-            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_SET);
-            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
-        } else {
-            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
-            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_SET);
-        }
-
-        if(speed == 0){
-            TI_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
-            TI_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
-        }
-    #else
-        if (speed >= 0) {
-            HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_SET);
-            HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_RESET);
-        } else {
-            HAL_GPIO_WritePin(pstStatic->pstDir1GpioBase, pstStatic->u32DirPin1, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(pstStatic->pstDir2GpioBase, pstStatic->u32DirPin2, GPIO_PIN_SET);
-        }
-    #endif
-
-    // 修改PWM占空比
-    #if (QEPACK_PLATFORM == TI)
-        DL_Timer_setCaptureCompareValue(
-            pstStatic->stTimer->timer_inst, 
-            absSpeed, 
-            pstStatic->emChannel
-        );
-    #else
-        __HAL_TIM_SET_COMPARE(pstStatic->pstPWM_htim, pstStatic->u32PWM_Channel, absSpeed); 
-    #endif
 }
+
+/**
+ * @brief          电机周期执行
+ * @param  emDevNum ：电机设备号
+ */
+void vMotorPeriodExecute(uint8_t emDevNum)
+{
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vPeriodExecute != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vPeriodExecute((void*)g_astMotorDevices[emDevNum]);
+        }
+    }
+}
+
+/**
+ * @brief          设置电机速度
+ * @param  emDevNum ：电机设备号
+ * @param  speed ：速度值
+ */
+void vMotorSetSpeed(uint8_t emDevNum, int16_t speed)
+{
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vSetSpeed != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vSetSpeed((void*)g_astMotorDevices[emDevNum], speed);
+        }
+    }
+}
+
+/**
+ * @brief          停止电机
+ * @param  emDevNum ：电机设备号
+ */
+void vMotorStop(uint8_t emDevNum)
+{
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vStop != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vStop((void*)g_astMotorDevices[emDevNum]);
+        }
+    }
+}
+
+/**
+ * @brief          电机使能控制
+ * @param  emDevNum ：电机设备号
+ * @param  bEnable ：使能状态
+ */
+void vMotorEnable(uint8_t emDevNum, uint8_t bEnable)
+{
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vEnable != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vEnable((void*)g_astMotorDevices[emDevNum], bEnable);
+        }
+    }
+}
+
+/**
+ * @brief          获取电机状态
+ * @param  emDevNum ：电机设备号
+ * @return emMotorStateTdf 电机状态
+ */
+emMotorStateTdf emGetMotorState(uint8_t emDevNum) {
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->emGetState != NULL) {
+            return g_astMotorDevices[emDevNum]->pstVTable->emGetState((void*)g_astMotorDevices[emDevNum]);
+        }
+    }
+    return emMotorStateNULL;
+}
+
 
 #endif

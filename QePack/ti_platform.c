@@ -4,6 +4,45 @@
 
 #include "ti_msp_dl_config.h"
 
+volatile unsigned long tick_ms;
+volatile uint32_t start_time;
+static uint8_t is_initialed_clock = 0;
+
+/**
+ * @brief SysTick处理函数
+ * 
+ */
+void SysTick_Handler(void)
+{
+    tick_ms++;
+}
+
+int mspm0_delay_ms(unsigned long num_ms)
+{
+    start_time = tick_ms;
+    while (tick_ms - start_time < num_ms);
+    return 0;
+}
+
+int mspm0_get_clock_ms(unsigned long *count)
+{
+    if (!count)
+        return 1;
+    count[0] = tick_ms;
+    return 0;
+}
+
+uint8_t ucGetSysTickInitialState(){
+    return is_initialed_clock;
+}
+
+void SysTick_Init(void)
+{
+    is_initialed_clock = 1;
+    DL_SYSTICK_config(CPUCLK_FREQ / 1000);
+    NVIC_SetPriority(SysTick_IRQn, 0);
+}
+
 void TI_Delay(uint32_t ms)
 {
     mspm0_delay_ms(ms);
@@ -141,12 +180,12 @@ GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin){
     void HAL_GPIO_WritePin(
         GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin,
         GPIO_PinState PinState)
-
-    void DL_GPIO_writePins(GPIO_Regs* gpio, uint32_t pins)
+        
+    永远不推荐使用 DL_GPIO_writePins !
 */
 void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinState){
     if(PinState == GPIO_PIN_SET){
-        DL_GPIO_writePins(GPIOx, GPIO_Pin);
+        DL_GPIO_setPins(GPIOx, GPIO_Pin);
     } else {
         DL_GPIO_clearPins(GPIOx, GPIO_Pin);
     }
@@ -225,5 +264,23 @@ uint32_t TI_GetTick(void)
     return tick_ms;
 }
 
+void vTiClearFlashDebris(){
+    // 清除状态
+    DL_FlashCTL_executeClearStatus(FLASHCTL);
+
+    // 解锁扇区
+    DL_FlashCTL_unprotectSector(
+        FLASHCTL,
+        (uint32_t)0x00010000,
+        DL_FLASHCTL_REGION_SELECT_MAIN
+    );
+
+    // 擦除
+    DL_FlashCTL_eraseMemory(
+        FLASHCTL,
+        (uint32_t)0x00010000,
+        DL_FLASHCTL_COMMAND_SIZE_SECTOR
+    );
+}
 
 #endif

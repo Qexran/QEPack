@@ -17,15 +17,17 @@
 
 /* ########################### System Configuration ######################### */
 #define QEPACK_PLATFORM   TI                    // 拓展包使用平台
+#define IS_DEBUG_MODE     1                     // 开启调试模式
 
-#if (QEPACK_PLATFORM == ST)
-    #include					"stm32f1xx_hal.h"			    // 设备头文件
-    #include					"stm32f1xx_hal_def.h"	    // 设备定义文件
+#if (QEPACK_PLATFORM == ST) // 设备头文件
+    #include					"stm32f1xx_hal.h"			    
+    #include					"stm32f1xx_hal_def.h
 #else
-    #include "ti_platform.h"
+    #include          "ti_platform.h"
+    #include          <ti/driverlib/dl_flashctl.h>
 #endif
 
-#define PI					3.141592653					// PI值
+
 #if (QEPACK_PLATFORM == ST)
   #define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
 #else
@@ -99,7 +101,7 @@
 
 /* ADC 相关 */
 #define ADC_DEVICE_IS_ENABLE							    1								// ADC 模块总开关
-#define ADC_IS_USE_DMA                                  1                               // ADC 是否使用DMA功能
+#define ADC_IS_USE_DMA                                  0                               // ADC 是否使用DMA功能
 #define ADC_RESOLUTION                                  4095                            // ADC 精度(12位: 2^12 - 1)
 #define ADC_VREF                                        3.3                             // ADC 电压
 #define ADC_CONVERSION_TIMEOUT_MS                       50                              // ADC 转换超时时间
@@ -125,25 +127,53 @@
 #define LINER_CCD_IS_DEBUG_MODE                         1                               // 线性CCD 调试模式
 #define LINER_CCD0                                      emLinerCcdDevNum0
 
+/* 灰度传感器 相关 */
+#define GRAY_SENSOR_IS_ENABLE                           1                               // 灰度传感器 模块总开关
+#define GRAY_SENSOR_DEV_NUM                             1                               // 灰度传感器 设备数量
+#define GRAY_SENSOR0                                    emGraySensorDevNum0
+#define GRAY_SENSOR_BACKUP_LENGTH                       2                               // 均值滤波历史长度
+#define GRAY_SENSOR_TRACK_THRESHOLD                     5                               // 时间窗口阈值
+#define GRAY_SENSOR_DIRECTION                           0                               // 灰度矫正方向
+
 /* PID 相关 */
-#define PID_IS_ENABLE                                   0                               // PID 模块总开关
+#define PID_IS_ENABLE                                   1                               // PID 模块总开关
 #define PID_DEV_NUM                                     2                               // PID 设备数量
 #define PID0                                            emPidDevNum0
 #define PID1                                            emPidDevNum1
 
 /* 电机 相关 */
-#define MOTOR_IS_ENABLE                                 1                               // 电机 模块总开关
-#define MOTOR_DEV_NUM                                   1                               // 电机 设备数量
-#define MOTOR0                                          emMotorDevNum0
+#define MOTOR_IS_ENABLE                                 1                               // 电机基类总开关
+#define MOTOR_DEV_NUM                                   8                               // 电机设备总数
+
+/* 直流减速电机 相关 */
+#define GEAR_MOTOR_IS_ENABLE                              1                               // 减速电机 模块总开关
+#define GEAR_MOTOR_DEV_NUM                                4                               // 减速电机 设备数量
+#define MOTOR_GEAR0                                     emGearMotorDevNum0
+#define MOTOR_GEAR1                                     emGearMotorDevNum1
+#define MOTOR_GEAR2                                     emGearMotorDevNum2
+#define MOTOR_GEAR3                                     emGearMotorDevNum3
+
+/* Emm步进电机 相关 */
+#define EMM_MOTOR_IS_ENABLE                             1                               // EMM步进电机 模块总开关
+#define EMM_MOTOR_DEV_NUM                               4                               // Emm步进电机 设备数量
+#define MOTOR_EMM0                                      emEmmMotorDevNum0
+#define MOTOR_EMM1                                      emEmmMotorDevNum1
+#define MOTOR_EMM2                                      emEmmMotorDevNum2
+#define MOTOR_EMM3                                      emEmmMotorDevNum3
+
+/* 电机系统控制器 相关 */
+#define MOTOR_SYSTEM_CONTROLLER_IS_ENABLE                  1                               // 电机系统控制器 模块总开关
+#define MOTOR_SYSTEM_CONTROLLER_DEV_NUM                  1                               // 电机系统控制器 设备数量
+#define MSC0                                             emMotorSystemDevNum0
+#define MOTOR_SYSTEM_CONTROLLER_PERIOD_MS                  10                              // 电机系统控制器 周期 (ms)
+#define MOTOR_SYSTEM_CONTROLLER_MAX_WHEEL_COUNT          4                               // 最大支持轮子数
+#define MOTOR_SYSTEM_CONTROLLER_MAX_ERROR_MM             5.0f                            // 位置控制精度要求 (mm)
 
 /* MPU6050 相关 (开发中) */
 #define MPU6050_IS_ENABLE                               0                               // MPU6050 模块总开关
 
 /* ATK_MS901M 相关 */
 #define ATK_MS901M_IS_ENABLE                            0                               // ATK_MS901M 模块总开关
-
-/* EMM_V5 相关 (待测试) */
-#define EMM_V5_IS_ENABLE                                0                               // EMM_V5 模块总开关
 
 /* W25Q64 Flash 相关 */
 #define W25Q64_IS_ENABLE                                0                               // W25Q64 模块总开关
@@ -154,7 +184,7 @@
 #define W25Q640                                         emW25q64DevNum0
 
 /** QMC5883 相关 */
-#define QMC_IS_ENABLE                                   0                               // QMC5883 模块总开关
+#define QMC5883_IS_ENABLE                               0                               // QMC5883 模块总开关
 #define QMC_DEV_NUM                                     1                               // QMC5883 设备数量
 #define QMC0                                            emQmcDevNum0
 

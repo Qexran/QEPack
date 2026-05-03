@@ -31,6 +31,9 @@
     #include "step_machine.h"
 #endif
 
+#if MOTOR_IS_ENABLE
+    #include "motor_device.h"
+#endif
 
 #if UART_IS_ENABLE
     #include "uart_device.h"

@@ -144,6 +144,107 @@ void vDevicePeriodExecute(){
             vStepProcess(STEP3); 
         #endif
     #endif
+
+    #if MOTOR_IS_ENABLE
+        #ifdef MOTOR_GEAR0 
+            vMotorPeriodExecute(MOTOR_GEAR0); 
+        #endif
+        #ifdef MOTOR_GEAR1 
+            vMotorPeriodExecute(MOTOR_GEAR1); 
+        #endif
+        #ifdef MOTOR_GEAR2 
+            vMotorPeriodExecute(MOTOR_GEAR2); 
+        #endif
+        #ifdef MOTOR_GEAR3 
+            vMotorPeriodExecute(MOTOR_GEAR3); 
+        #endif
+        #ifdef MOTOR_GEAR4 
+            vMotorPeriodExecute(MOTOR_GEAR4); 
+        #endif
+        #ifdef MOTOR_GEAR5 
+            vMotorPeriodExecute(MOTOR_GEAR5); 
+        #endif
+        #ifdef MOTOR_GEAR6 
+            vMotorPeriodExecute(MOTOR_GEAR6); 
+        #endif
+        #ifdef MOTOR_GEAR7 
+            vMotorPeriodExecute(MOTOR_GEAR7); 
+        #endif
+        #ifdef MOTOR_GEAR8 
+            vMotorPeriodExecute(MOTOR_GEAR8);
+        #endif
+        #ifdef MOTOR_GEAR9 
+            vMotorPeriodExecute(MOTOR_GEAR9); 
+        #endif
+
+
+        /* EMM电机 */
+        #ifdef MOTOR_EMM0 
+            vMotorPeriodExecute(MOTOR_EMM0); 
+        #endif
+        #ifdef MOTOR_EMM1 
+            vMotorPeriodExecute(MOTOR_EMM1); 
+        #endif
+        #ifdef MOTOR_EMM2 
+            vMotorPeriodExecute(MOTOR_EMM2); 
+        #endif
+        #ifdef MOTOR_EMM3 
+            vMotorPeriodExecute(MOTOR_EMM3); 
+        #endif
+        #ifdef MOTOR_EMM4 
+            vMotorPeriodExecute(MOTOR_EMM4); 
+        #endif
+        #ifdef MOTOR_EMM5 
+            vMotorPeriodExecute(MOTOR_EMM5); 
+        #endif
+        #ifdef MOTOR_EMM6 
+            vMotorPeriodExecute(MOTOR_EMM6); 
+        #endif
+        #ifdef MOTOR_EMM7 
+            vMotorPeriodExecute(MOTOR_EMM7); 
+        #endif
+        #ifdef MOTOR_EMM8 
+            vMotorPeriodExecute(MOTOR_EMM8); 
+        #endif
+        #ifdef MOTOR_EMM9 
+            vMotorPeriodExecute(MOTOR_EMM9); 
+        #endif
+
+
+        /* BLDC电机 */
+        #ifdef MOTOR_BLDC0 
+            vMotorPeriodExecute(MOTOR_BLDC0); 
+        #endif
+        #ifdef MOTOR_BLDC1 
+            vMotorPeriodExecute(MOTOR_BLDC1); 
+        #endif
+        #ifdef MOTOR_BLDC2 
+            vMotorPeriodExecute(MOTOR_BLDC2); 
+        #endif
+        #ifdef MOTOR_BLDC3 
+            vMotorPeriodExecute(MOTOR_BLDC3); 
+        #endif
+        #ifdef MOTOR_BLDC4 
+            vMotorPeriodExecute(MOTOR_BLDC4); 
+        #endif
+        #ifdef MOTOR_BLDC5 
+            vMotorPeriodExecute(MOTOR_BLDC5); 
+        #endif
+        #ifdef MOTOR_BLDC6 
+            vMotorPeriodExecute(MOTOR_BLDC6); 
+        #endif
+        #ifdef MOTOR_BLDC7 
+            vMotorPeriodExecute(MOTOR_BLDC7); 
+        #endif
+        #ifdef MOTOR_BLDC8 
+            vMotorPeriodExecute(MOTOR_BLDC8); 
+        #endif
+        #ifdef MOTOR_BLDC9 
+            vMotorPeriodExecute(MOTOR_BLDC9); 
+        #endif
+
+
+    #endif
 }
 
 
