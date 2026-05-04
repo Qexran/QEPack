@@ -62,7 +62,9 @@ float fMedianFilter(float fValue, float* afBuffer, uint8_t u8BufferSize)
 static int32_t lEncoderGetEncoder(emEncoderDevNumTdf emDevNum)
 {
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
-    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+    #if (QEPACK_PLATFORM == TI)
+        stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+    #endif
     
     #if (ENCODER_HANDLE_PLAN == TIM) // TIM
         return ( int32_t )
@@ -259,7 +261,6 @@ void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
             stEncoderDeviceParamTdf *pstParam = &astEncoderDeviceParam[i];
             if(pstParam->stStaticParam.pstHandleTimerBase == htim){
                 stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[i].stRunningParam;
-                stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[i].stStaticParam;
                 
                 if(pstRunning->_1ms_time_count++ < ENCODER_HANDLE_FREQ){
                     return;

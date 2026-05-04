@@ -73,32 +73,17 @@ static void vLinerCcdSetClk(emLinerCcdDevNumTdf emDevNum, uint8_t state)
  * @brief 读取ADC值
  * @param emDevNum 设备号
  */
-#if (QEPACK_PLATFORM == TI)
-    static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
-#else
-    static HAL_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
-#endif  
+static QE_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
 {
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
-    
+
     #if (QEPACK_PLATFORM == ST)
-        ADC_ChannelConfTypeDef sConfig = {0};
-        sConfig.Channel = pstStatic->ulAdcChannel;
-        sConfig.Rank = 1;
-        sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
-        if (HAL_ADC_ConfigChannel(pstStatic->hadc, &sConfig) == HAL_OK) {
-            HAL_ADC_Start(pstStatic->hadc);
-            HAL_ADC_PollForConversion(pstStatic->hadc, 200);
-            pstRunning->adcValue = HAL_ADC_GetValue(pstStatic->hadc);
-            HAL_ADC_Stop(pstStatic->hadc);
-        }
-    #else
         // 无论在普通还是DMA模式下，都应只设置一个通道
         
         const stAdcDeviceParamTdf *stAdc = c_pstGetAdcDeviceParam(pstStatic->emAdcDevNum);
         
-        if(stAdc->stStaticParam.ulConversionNumber > 1) return TI_ERROR;
+        if(stAdc->stRunningParam.ulConversionNumber > 1) return QE_ERROR;
 
         #if ADC_IS_USE_DMA
             vAdcStart(pstStatic->emAdcDevNum);
@@ -106,7 +91,29 @@ static void vLinerCcdSetClk(emLinerCcdDevNumTdf emDevNum, uint8_t state)
             vAdcStart(pstStatic->emAdcDevNum, pstStatic->emAdcChannel);
         #endif
         
-        if(TI_ADC_PollForConversion(pstStatic->emAdcDevNum, TI_MAX_DELAY) == TI_OK){
+        if(HAL_ADC_PollForConversion(stGetAdcHandle(pstStatic->emAdcDevNum), HAL_MAX_DELAY) == QE_OK){
+            #if ADC_IS_USE_DMA
+                
+                uint16_t *result = pstADCGetValue(pstStatic->emAdcDevNum);
+                pstRunning->adcValue = result[0];
+            #else
+                pstRunning->adcValue = usADCGetValue(pstStatic->emAdcDevNum);
+            #endif
+        }
+    #else
+        // 无论在普通还是DMA模式下，都应只设置一个通道
+        
+        const stAdcDeviceParamTdf *stAdc = c_pstGetAdcDeviceParam(pstStatic->emAdcDevNum);
+        
+        if(stAdc->stStaticParam.ulConversionNumber > 1) return QE_ERROR;
+
+        #if ADC_IS_USE_DMA
+            vAdcStart(pstStatic->emAdcDevNum);
+        #else
+            vAdcStart(pstStatic->emAdcDevNum, pstStatic->emAdcChannel);
+        #endif
+        
+        if(TI_ADC_PollForConversion(pstStatic->emAdcDevNum, TI_MAX_DELAY) == QE_OK){
             #if ADC_IS_USE_DMA
                 
                 uint16_t *result = pstADCGetValue(pstStatic->emAdcDevNum);
@@ -117,7 +124,7 @@ static void vLinerCcdSetClk(emLinerCcdDevNumTdf emDevNum, uint8_t state)
         }
     #endif
 
-    return TI_OK;
+    return QE_OK;
 }
 
 /**
@@ -151,15 +158,14 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
  * @brief 读取CCD像素数据
  * @param emDevNum 设备号
  */
-#if (QEPACK_PLATFORM == TI)
-    TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
-#else
-    HAL_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
-#endif  
+
+QE_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return QE_ERROR;
     
-    stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #if (QEPACK_PLATFORM == TI)
+        stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #endif
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
     vLinerCcdSetClk(emDevNum, 1);
@@ -188,22 +194,20 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
         Dly_us(1);
     }
     
-    return TI_OK;
+    return QE_OK;
 }
 
 /**
  * @brief 计算黑白阈值
  * @param emDevNum 设备号
  */
-#if (QEPACK_PLATFORM == TI)
-    TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
-#else
-    HAL_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
-#endif  
+QE_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return QE_ERROR;
     
-    stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #if (QEPACK_PLATFORM == TI)
+        stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #endif
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
     uint8_t ucStart = 0 + LINER_CCD_NEGLECT_THREHOLD;
@@ -221,28 +225,27 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
         }
     }
     
-    if(usMax == usMin) return TI_ERROR;
+    if(usMax == usMin) return QE_ERROR;
     
     pstRunning->usMaxValue = usMax;
     pstRunning->usMinValue = usMin;
     pstRunning->usThreshold = (usMax + usMin) / 2;
 
-    return TI_OK;
+    return QE_OK;
 }
 
 /**
  * @brief 检测中线位置(单线)
  * @param emDevNum 设备号
  */
-#if (QEPACK_PLATFORM == TI)
-    TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
-#else
-    HAL_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
-#endif  
+
+QE_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
 {
-    if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
+    if (emDevNum >= LINER_CCD_DEV_NUM) return QE_ERROR;
     
-    stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #if (QEPACK_PLATFORM == TI)
+        stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+    #endif
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
     uint16_t usThreshold = pstRunning->usThreshold;
@@ -289,11 +292,11 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
     }
     
     /* 计算中线的偏差,如果太大则取上次的值 */
-    if(abs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
+    if(fabs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
         pstRunning->sCenterLine = pstRunning->sLastCenterLine;  
-        return TI_ERROR; 
+        return QE_ERROR; 
     }
-    return TI_OK;
+    return QE_OK;
 }
 
 /**
@@ -341,7 +344,9 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
     {
         if (emDevNum >= LINER_CCD_DEV_NUM) return;
         
+        #if (QEPACK_PLATFORM == TI)
         stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
+        #endif
         stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
         
         SciBuf[0] = 0; 

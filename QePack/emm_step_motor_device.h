@@ -67,8 +67,8 @@ typedef struct
 /// @brief  EmmMotor静态参数定义
 typedef struct
 {
-    uint8_t     emUartDevNum;               /* 关联的UART设备号 */
-    uint8_t     ucAddr;                     /* 电机地址 */
+    emUartDevNumTdf     emUartDevNum;               /* 关联的UART设备号 */
+    uint8_t             ucAddr;                     /* 电机地址 */
 } stEmmMotorStaticParamTdf;
 
 /// @brief  EmmMotor设备参数定义

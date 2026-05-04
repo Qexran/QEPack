@@ -13,6 +13,15 @@
 /* 全局ADC设备参数数组 */
 stAdcDeviceParamTdf astAdcDeviceParam[ADC_DEV_NUM];
 
+#if (QEPACK_PLATFORM == ST)
+    ADC_HandleTypeDef *stGetAdcHandle(emAdcDevNumTdf emDevNum)
+    {
+        if(emDevNum >= ADC_DEV_NUM)
+            return NULL;
+        return astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
+    }
+#endif
+
 #if !ADC_IS_USE_DMA
     #if (QEPACK_PLATFORM == ST)
         ADC_ChannelConfTypeDef sConfig = {0};
@@ -41,7 +50,9 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
     memcpy(&astAdcDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stAdcStaticParamTdf));
 	memset(&astAdcDeviceParam[emDevNum].stRunningParam, 0, sizeof(stAdcRunningParamTdf));
     
-    stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+    #if (QEPACK_PLATFORM == TI)
+        stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
+    #endif
     stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
 
     #if (QEPACK_PLATFORM == ST)

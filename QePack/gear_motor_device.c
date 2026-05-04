@@ -216,7 +216,7 @@ void vGearMotorSetSpeed(void *pstMotor, int16_t speed)
  */
 void vGearMotorRegister(emMotorDevNumTdf emDevNum, stGearMotorStaticParamTdf *pstInit)
 {
-    emMotorDevNumTdf offsetDevNum = emDevNum - emGearMotorDevNum0;
+    emMotorDevNumTdf offsetDevNum =  (emMotorDevNumTdf) (emDevNum - emGearMotorDevNum0);
     
     if (offsetDevNum < GEAR_MOTOR_DEV_NUM && pstInit != NULL) {
         

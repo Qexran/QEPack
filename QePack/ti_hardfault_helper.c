@@ -2,6 +2,8 @@
 
 #if IS_DEBUG_MODE
 
+#if (QEPACK_PLATFORM == TI)
+
 void NMI_Handler(void)
 {
     __BKPT();
@@ -151,5 +153,7 @@ void DMA_IRQHandler(void)
 // {
 //     __BKPT();
 // }
+
+#endif
 
 #endif

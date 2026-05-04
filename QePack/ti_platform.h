@@ -1,11 +1,9 @@
 #ifndef __TI_PLATFORM__
 #define __TI_PLATFORM__
 
-#include "qepack_settings.h"
+#include "project_config.h"
 
 #if (QEPACK_PLATFORM == TI)
-
-#include "ti_msp_dl_config.h"
 
 #define TI_MAX_DELAY      0xFFFFFFFFU
 
@@ -19,19 +17,6 @@ typedef enum
   GPIO_PIN_RESET,
   GPIO_PIN_SET
 } GPIO_PinState;
-
-/**
- * @brief 全局状态枚举
- */
-typedef enum
-{
-  TI_OK       = 0x00U,
-  TI_ERROR    = 0x01U,
-  TI_BUSY     = 0x02U,
-  TI_TIMEOUT  = 0x03U,
-  TI_IDLE     = 0X04U
-} TI_StatusTypeDef;
-
 
 #define ADC_CHANNEL_0                      DL_ADC12_MEM_IDX_0
 #define ADC_CHANNEL_1                      DL_ADC12_MEM_IDX_1

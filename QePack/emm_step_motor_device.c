@@ -241,7 +241,7 @@ void vEmmMotorStop(void *pstMotor, uint8_t bSyncFlag)
  */
 void vEmmMotorRegister(emMotorDevNumTdf emDevNum, stEmmMotorStaticParamTdf *pstInit)
 {   
-    emMotorDevNumTdf offsetDevNum = emDevNum - emEmmMotorDevNum0;
+    emMotorDevNumTdf offsetDevNum = (emMotorDevNumTdf) (emDevNum - emEmmMotorDevNum0);
     
     if (offsetDevNum < EMM_MOTOR_DEV_NUM && pstInit != NULL) {
 

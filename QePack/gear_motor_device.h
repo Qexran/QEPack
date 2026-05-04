@@ -33,12 +33,14 @@ typedef struct
         GPIO_Regs           *pstStbyGpioBase;        // 电机待机引脚对应的GPIOX
         uint32_t            u32StbyPin;               // 电机待机引脚的GPIO_PIN号
 	#else
-   		TIM_HandleTypeDef *pstPWM_htim;         // 电机PWM使用的定时器
-        uint32_t u32PWM_Channel;                // PWM输出通道
-        GPIO_TypeDef *pstDir1GpioBase;          // 电机控制引脚1对应的GPIOX
-        uint32_t u32DirPin1;                    // 电机方向控制引脚1
-        GPIO_TypeDef *pstDir2GpioBase;          // 电机控制引脚2对应的GPIOX
-        uint32_t u32DirPin2;                    // 电机方向控制引脚2
+   		TIM_HandleTypeDef   *pstPWM_htim;         // 电机PWM使用的定时器
+        uint32_t            u32PWM_Channel;                // PWM输出通道
+        GPIO_TypeDef        *pstDir1GpioBase;          // 电机控制引脚1对应的GPIOX
+        uint32_t            u32DirPin1;                    // 电机方向控制引脚1
+        GPIO_TypeDef        *pstDir2GpioBase;          // 电机控制引脚2对应的GPIOX
+        uint32_t            u32DirPin2;                    // 电机方向控制引脚2
+        GPIO_TypeDef        *pstStbyGpioBase;        // 电机待机引脚对应的GPIOX
+        uint32_t            u32StbyPin;               // 电机待机引脚的GPIO_PIN号
     #endif
     
     

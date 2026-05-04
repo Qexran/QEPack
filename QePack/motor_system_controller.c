@@ -65,10 +65,9 @@ const stMotorSystemParamTdf* c_pstGetMotorSystemControllerParam(void)
 void vMotorSystemInit(stMotorSystemStaticParamTdf *pstInit)
 {
     stMotorSystemRunningParamTdf *pstRunning = &g_stMotorSystemController.stRunningParam;
-    stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
     if (pstInit != NULL) {
-        pstStatic = pstInit;
+        g_stMotorSystemController.stStaticParam = pstInit;
     }
 
     memset(pstRunning, 
@@ -197,7 +196,7 @@ void vMotorSystemSetPose(float fTargetYawDeg, float fOmegaRadS)
  * @brief 电机系统控制器周期执行
  */
 void vMotorSystemPeriodExecute(void) {
-    stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
+    //stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
 }
 

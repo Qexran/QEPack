@@ -14,6 +14,8 @@
 
 #include "string.h"
 #include "delay.h"
+#include "arithmetic.h"
+
 
 #include "adc_device.h"
 
@@ -44,6 +46,7 @@ typedef struct {
         GPIO_TypeDef        *pstClkGpioPort;    // CLK引脚端口
         uint16_t            usClkGpioPin;       // CLK引脚号
         emAdcDevNumTdf      emAdcDevNum;        // ADC设备号
+        uint32_t            emAdcChannel;       // CCD对应的ADC通道
         #if LINER_CCD_IS_DEBUG_MODE
             UART_HandleTypeDef   *huart;        // 调试串口句柄
         #endif
@@ -93,22 +96,13 @@ const stLinerCcdDeviceParamTdf *c_pstGetLinerCcdDeviceParam(emLinerCcdDevNumTdf 
 /* 初始化函数 */
 void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf emDevNum);
 
-#if (QEPACK_PLATFORM == TI)
-    /* 数据采集函数 */
-    TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
-    /* 阈值计算函数 */
-    TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
-    /* 中线检测函数 */
-    TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
-#else
-    /* 数据采集函数 */
-    HAL_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
-    /* 阈值计算函数 */
-    HAL_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
-    /* 中线检测函数 */
-    HAL_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
-#endif
 
+/* 数据采集函数 */
+QE_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
+/* 阈值计算函数 */
+QE_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
+/* 中线检测函数 */
+QE_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
 
 /* 获取像素数据 */
 const uint16_t *pusLinerCcdGetPixelData(emLinerCcdDevNumTdf emDevNum);

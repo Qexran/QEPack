@@ -70,7 +70,7 @@ typedef struct
     uint32_t            ulCurrentValue;                 // 单次转换当前值
 
 
-    #if (QEPACK_PLATFORM == ST)
+    #if (QEPACK_PLATFORM == ST)         /* 这些参数都可以通过cubemx自动推断，故放在running里 */
         FunctionalState     emContinuousState;              // 连续转换状态
         FunctionalState     emDisContinuousState;           // 非连续转换状态
         uint32_t            ulScanConvMode;                 // 扫描模式
@@ -131,6 +131,8 @@ void vAdcDeviceRunningParamInit(stAdcRunningParamTdf *pstInit, emAdcDevNumTdf em
 
 #if (QEPACK_PLATFORM == TI)
     TI_StatusTypeDef TI_ADC_PollForConversion(emAdcDevNumTdf emDevNum, uint32_t ulTimeOut);
+#else
+    ADC_HandleTypeDef *stGetAdcHandle(emAdcDevNumTdf emDevNum); 
 #endif
 
 #endif
