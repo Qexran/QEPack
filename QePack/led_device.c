@@ -11,6 +11,10 @@
 
 stLedDeviceParamTdf astLedDeviceParam[LED_DEV_NUM];
 
+#if (QEPACK_PLATFORM == TI)
+    #include "ti_platform.h"
+#endif
+
 /**
  * @brief       获取 LED 设备参数
  * @param       emDevNum   ：设备号

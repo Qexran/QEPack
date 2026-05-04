@@ -15,8 +15,29 @@
 #define TI                  0                           // 占位符
 #define ST                  1                           // 占位符
 
+/**
+ * @brief 全局状态枚举
+ */
+typedef enum
+{
+  QE_OK       = 0x00U,
+  QE_ERROR    = 0x01U,
+  QE_BUSY     = 0x02U,
+  QE_TIMEOUT  = 0x03U,
+  QE_IDLE     = 0X04U
+} QE_StatusTypeDef;
+
 /* ########################### System Configuration ######################### */
 #include                        "qepack_settings.h"
+
+#if (QEPACK_PLATFORM == ST) // 设备头文件
+    #include					          "stm32f1xx_hal.h"			    
+    #include					          "stm32f1xx_hal_def.h"
+#else
+    #include                    "ti_msp_dl_config.h"
+    #include                    <ti/driverlib/dl_flashctl.h>
+    // #include                    "ti_platform.h"
+#endif
 
 
 #if (QEPACK_PLATFORM == ST)

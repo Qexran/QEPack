@@ -15,7 +15,7 @@
 #if (QEPACK_PLATFORM == ST) 
     #include "usart.h"
 #else
-    #include "QEPack.h"
+    #include "ti_platform.h"
 #endif
 
 #include "stdarg.h"

@@ -16,7 +16,7 @@
 #include "math.h"
 
 #if (QEPACK_PLATFORM == TI)
-	
+	#include "ti_platform.h"
 #else
 	#include "stm32f1xx_hal.h"
 #endif

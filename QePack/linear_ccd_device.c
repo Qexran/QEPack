@@ -292,7 +292,11 @@ QE_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
     }
     
     /* 计算中线的偏差,如果太大则取上次的值 */
-    if(fabs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
+    #if (QEPACK_PLATFORM == TI)
+        if(abs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
+    #else
+        if(fabs(pstRunning->sLastCenterLine - pstRunning->sCenterLine) >= LINER_CCD_CENTERLINE_ERROR_THREHOLD){
+    #endif
         pstRunning->sCenterLine = pstRunning->sLastCenterLine;  
         return QE_ERROR; 
     }

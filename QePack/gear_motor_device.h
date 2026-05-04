@@ -17,6 +17,11 @@
 #ifndef _GEAR_MOTOR_DEVICE_H_
 #define _GEAR_MOTOR_DEVICE_H_
 
+
+#if (QEPACK_PLATFORM == TI)
+    #include "ti_platform.h"
+#endif
+
 /**
  * @brief          减速电机静态参数结构体
  * @note           

@@ -1,13 +1,11 @@
 #ifndef __TI_PLATFORM__
 #define __TI_PLATFORM__
 
-#include "project_config.h"
-
-#if (QEPACK_PLATFORM == TI)
-
 #define TI_MAX_DELAY      0xFFFFFFFFU
 
 extern volatile unsigned long tick_ms;
+
+#include "project_config.h"
 
 /**
  * @brief GPIO引脚状态枚举
@@ -126,7 +124,7 @@ void TI_I2C_Mem_Write(
     uint8_t *pData, uint16_t Size, uint32_t Timeout
 );
 
-TI_StatusTypeDef TI_UART_Transmit(
+QE_StatusTypeDef TI_UART_Transmit(
     stUartTdf *i2c_inst, const uint8_t *pData, 
     uint16_t Size, uint32_t Timeout
 );
@@ -147,6 +145,6 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
 void TI_ADC_Start(stAdcTdf *pstAdcBase);
 
 void vTiClearFlashDebris();
-#endif
+
 
 #endif

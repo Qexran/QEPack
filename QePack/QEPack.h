@@ -6,7 +6,6 @@
 #include                    "ti_hardfault_helper.h"
 #include                    "arithmetic.h"
 
-
 #if LINEAR_CCD_IS_ENABLE
     #include "linear_ccd_device.h"
 #endif

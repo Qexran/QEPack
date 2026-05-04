@@ -9,6 +9,7 @@
   
 
 #include "project_config.h"
+
 #if ADC_DEVICE_IS_ENABLE
 
 #ifndef _ADC_DEVICE_H_
@@ -18,9 +19,8 @@
 
 #if (QEPACK_PLATFORM == ST)
     #include "adc.h"
-#endif
-
-#if ADC_IS_USE_DMA
+#else
+    #include "ti_platform.h"
 #endif
 
 /// @brief          ADC设备号枚举
@@ -130,10 +130,13 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum);     
 void vAdcDeviceRunningParamInit(stAdcRunningParamTdf *pstInit, emAdcDevNumTdf emDevNum);    // 初始化运行参数
 
 #if (QEPACK_PLATFORM == TI)
-    TI_StatusTypeDef TI_ADC_PollForConversion(emAdcDevNumTdf emDevNum, uint32_t ulTimeOut);
+    QE_StatusTypeDef TI_ADC_PollForConversion(
+        emAdcDevNumTdf emDevNum, uint32_t ulTimeOut
+    );
 #else
     ADC_HandleTypeDef *stGetAdcHandle(emAdcDevNumTdf emDevNum); 
 #endif
+
 
 #endif
 

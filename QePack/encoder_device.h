@@ -22,6 +22,7 @@
     #if (ENCODER_IS_USE_PARASITISM)
         #include "timer_controller.h"
     #endif
+    #include "ti_platform.h"
 #endif
 
 /** @brief 编码器设备号枚举 */

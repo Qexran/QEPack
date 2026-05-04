@@ -244,8 +244,7 @@ float fADCConvertToResult(
     HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout)
 */
 #if (QEPACK_PLATFORM == TI)
-
-    TI_StatusTypeDef TI_ADC_PollForConversion(
+    QE_StatusTypeDef TI_ADC_PollForConversion(
         emAdcDevNumTdf emDevNum, uint32_t ulTimeOut
     ){
         unsigned long start, cur;
@@ -255,10 +254,10 @@ float fADCConvertToResult(
         while(emAdcGetDataState(emDevNum) != UPDATED){
             mspm0_get_clock_ms(&cur);
             
-            if(cur >= (start + ulTimeOut)) return TI_TIMEOUT;
+            if(cur >= (start + ulTimeOut)) return QE_TIMEOUT;
         }
 
-        return TI_OK;
+        return QE_OK;
     }
 #endif 
 

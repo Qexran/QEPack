@@ -15,7 +15,7 @@
 #include "string.h"
 #include "delay.h"
 #include "arithmetic.h"
-
+#include <stdlib.h>
 
 #include "adc_device.h"
 

@@ -197,7 +197,7 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
             UART_HandleTypeDef *huart, const uint8_t *pData, 
             uint16_t Size, uint32_t Timeout)
 */
-TI_StatusTypeDef TI_UART_Transmit(
+QE_StatusTypeDef TI_UART_Transmit(
     stUartTdf *uart_inst, const uint8_t *pData, 
     uint16_t Size, uint32_t Timeout
 ){
@@ -219,14 +219,14 @@ TI_StatusTypeDef TI_UART_Transmit(
                 mspm0_get_clock_ms(&cur);
 
                 if ((cur - start) >= Timeout) {
-                    return TI_TIMEOUT; 
+                    return QE_TIMEOUT; 
                 }
                 
             }
         }
     }
 
-    return TI_OK;
+    return QE_OK;
 }
 
 
@@ -282,5 +282,6 @@ void vTiClearFlashDebris(){
         DL_FLASHCTL_COMMAND_SIZE_SECTOR
     );
 }
+
 
 #endif
