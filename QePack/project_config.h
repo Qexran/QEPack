@@ -20,13 +20,13 @@
 #define IS_DEBUG_MODE     1                     // 开启调试模式
 
 #if (QEPACK_PLATFORM == ST) // 设备头文件
+    #include          "qepack_settings.h"
     #include					"stm32f1xx_hal.h"			    
     #include					"stm32f1xx_hal_def.h"
 #else
     #include          "ti_platform.h"
     #include          <ti/driverlib/dl_flashctl.h>
 #endif
-
 
 #if (QEPACK_PLATFORM == ST)
   #define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率

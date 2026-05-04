@@ -1,6 +1,7 @@
 #ifndef __TI_PLATFORM__
 #define __TI_PLATFORM__
 
+#include "qepack_settings.h"
 
 #if (QEPACK_PLATFORM == TI)
 
@@ -9,8 +10,6 @@
 #define TI_MAX_DELAY      0xFFFFFFFFU
 
 extern volatile unsigned long tick_ms;
-
-
 
 /**
  * @brief GPIO引脚状态枚举

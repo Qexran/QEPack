@@ -23,7 +23,7 @@
 #if (QEPACK_PLATFORM == ST) 
     #include "i2c.h"
 #elif (QEPACK_PLATFORM == TI)
-    //#include "ti_platform.h"
+    #include "ti_platform.h"
 #endif
 
 
