@@ -222,8 +222,10 @@ void OLED_I2C_SendByte(emOledDevNumTdf emDevNum, uint8_t Byte)
 
 	void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
 	{
+        stOledStaticParamTdf *pstStatic = &astOledDeviceParam[emDevNum].stStaticParam;
+        
 		#if (QEPACK_PLATFORM == TI)
-			stOledStaticParamTdf *pstStatic = &astOledDeviceParam[emDevNum].stStaticParam;
+			
 			TI_I2C_Mem_Write(
 				pstStatic->hi2c, 
 				OLED_HARDWARE_I2C_ADDR, 
@@ -234,7 +236,7 @@ void OLED_I2C_SendByte(emOledDevNumTdf emDevNum, uint8_t Byte)
 			);
 		#else
 			HAL_I2C_Mem_Write(
-				pstStatic->stStaticParam.hi2c, 
+				pstStatic->hi2c, 
 				OLED_HARDWARE_I2C_ADDR, 
 				0x00, 
 				1, 

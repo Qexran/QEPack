@@ -1,5 +1,8 @@
 # QEPack - 像CubeMX一样使用模块
 
+[![ST](https://img.shields.io/badge/STMicroelectronics-03234B?style=for-the-badge&logo=stmicroelectronics&logoColor=white)](https://www.st.com/)
+[![TI](https://img.shields.io/badge/Texas_Instruments-e61f19?style=for-the-badge&logo=texasinstruments&logoColor=white)](https://www.ti.com/)
+
 ## 🚀 拓展包特点
 - **面向对象**：所有抽象模块均采用面向对象设计模式
 - **易扩展**：模块化设计，支持相互继承模块
@@ -42,7 +45,7 @@
 ### ADC
 - ✅ 支持多通道+DMA模式
 - ✅ 支持自选通道转换模式
-- ✅ 支持自动转换采样值
+- ✅ 支持转换采样值
 
 ### 超声波Ultrasonic
 - ✅ 使用双通道测量
@@ -81,6 +84,15 @@
 ### 存储模块W25Q64
 - ✅ 支持基本读取、写入、擦除操作
 - ✅ 支持页编程和地址编程
+
+### 线性CCD模块
+- ✅ 支持基本数据读取操作
+- ✅ 支持自定义曝光时间、阈值限制
+- ✅ 支持连接上位机
+
+### 灰度传感器模块
+- ✅ 支持基本数据读取操作
+- 🚧 支持模拟量输入
 
 ## 🚀 快速开始
 
