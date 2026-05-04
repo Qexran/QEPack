@@ -129,7 +129,10 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum);
 void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum);                  // 初始化静态参数
 void vAdcDeviceRunningParamInit(stAdcRunningParamTdf *pstInit, emAdcDevNumTdf emDevNum);    // 初始化运行参数
 
-TI_StatusTypeDef TI_ADC_PollForConversion(emAdcDevNumTdf emDevNum, uint32_t ulTimeOut);
+#if (QEPACK_PLATFORM == TI)
+    TI_StatusTypeDef TI_ADC_PollForConversion(emAdcDevNumTdf emDevNum, uint32_t ulTimeOut);
+#endif
+
 #endif
 
 #endif

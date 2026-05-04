@@ -73,7 +73,11 @@ static void vLinerCcdSetClk(emLinerCcdDevNumTdf emDevNum, uint8_t state)
  * @brief 读取ADC值
  * @param emDevNum 设备号
  */
-static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
+#if (QEPACK_PLATFORM == TI)
+    static TI_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
+#else
+    static HAL_StatusTypeDef usLinerCcdReadAdc(emLinerCcdDevNumTdf emDevNum)
+#endif  
 {
     stLinerCcdStaticParamTdf *pstStatic = &astLinerCcdDeviceParam[emDevNum].stStaticParam;
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
@@ -147,7 +151,11 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
  * @brief 读取CCD像素数据
  * @param emDevNum 设备号
  */
-TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
+#if (QEPACK_PLATFORM == TI)
+    TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
+#else
+    HAL_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
+#endif  
 {
     if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     
@@ -187,7 +195,11 @@ TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
  * @brief 计算黑白阈值
  * @param emDevNum 设备号
  */
-TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
+#if (QEPACK_PLATFORM == TI)
+    TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
+#else
+    HAL_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
+#endif  
 {
     if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     
@@ -222,7 +234,11 @@ TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
  * @brief 检测中线位置(单线)
  * @param emDevNum 设备号
  */
-TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
+#if (QEPACK_PLATFORM == TI)
+    TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
+#else
+    HAL_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
+#endif  
 {
     if (emDevNum >= LINER_CCD_DEV_NUM) return TI_ERROR;
     

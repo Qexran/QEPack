@@ -26,12 +26,12 @@ typedef enum
  */
 typedef enum
 {
-  TI_OK       = 0x00U,
-  TI_ERROR    = 0x01U,
-  TI_BUSY     = 0x02U,
-  TI_TIMEOUT  = 0x03U,
-  TI_IDLE     = 0X04U
-} TI_StatusTypeDef;
+  QE_OK       = 0x00U,
+  QE_ERROR    = 0x01U,
+  QE_BUSY     = 0x02U,
+  QE_TIMEOUT  = 0x03U,
+  QE_IDLE     = 0X04U
+} QE_StatusTypeDef;
 
 
 #define ADC_CHANNEL_0                      DL_ADC12_MEM_IDX_0

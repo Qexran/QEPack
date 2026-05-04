@@ -62,7 +62,8 @@ float fMedianFilter(float fValue, float* afBuffer, uint8_t u8BufferSize)
 static int32_t lEncoderGetEncoder(emEncoderDevNumTdf emDevNum)
 {
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
-    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+    // never used.
+    // stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
     
     #if (ENCODER_HANDLE_PLAN == TIM) // TIM
         return ( int32_t )

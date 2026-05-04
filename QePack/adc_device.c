@@ -227,21 +227,24 @@ float fADCConvertToResult(
     函数原型:
     HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout)
 */
-TI_StatusTypeDef TI_ADC_PollForConversion(
-    emAdcDevNumTdf emDevNum, uint32_t ulTimeOut
-){
-    unsigned long start, cur;
-    
-    mspm0_get_clock_ms(&start);
-    
-    while(emAdcGetDataState(emDevNum) != UPDATED){
-        mspm0_get_clock_ms(&cur);
-        
-        if(cur >= (start + ulTimeOut)) return TI_TIMEOUT;
-    }
+#if (QEPACK_PLATFORM == TI)
 
-    return TI_OK;
-}
+    TI_StatusTypeDef TI_ADC_PollForConversion(
+        emAdcDevNumTdf emDevNum, uint32_t ulTimeOut
+    ){
+        unsigned long start, cur;
+        
+        mspm0_get_clock_ms(&start);
+        
+        while(emAdcGetDataState(emDevNum) != UPDATED){
+            mspm0_get_clock_ms(&cur);
+            
+            if(cur >= (start + ulTimeOut)) return TI_TIMEOUT;
+        }
+
+        return TI_OK;
+    }
+#endif 
 
 /**
  * @brief 获取ADC转换状态
