@@ -148,7 +148,12 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
  * @param emDevNum 设备号
  * @param Channel 通道号
  */
-void vAdcStart(emAdcDevNumTdf emDevNum, DL_ADC12_MEM_IDX Channel){
+#if (QEPACK_PLATFORM == ST)                   // 对特定通道转换
+    void vAdcStart(emAdcDevNumTdf emDevNum, uint32_t Channel)
+#else
+    void vAdcStart(emAdcDevNumTdf emDevNum, DL_ADC12_MEM_IDX Channel)
+#endif
+{
     stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
 
     #if (QEPACK_PLATFORM == ST)
