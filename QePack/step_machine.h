@@ -16,6 +16,10 @@
 #ifndef _STEP_MACHINE_H_
 #define _STEP_MACHINE_H_
 
+#if (QEPACK_PLATFORM == TI)
+    #include "ti_platform.h"
+#endif
+
 
 /** @brief 步骤机设备号*/
 typedef enum {
