@@ -43,6 +43,6 @@
     #include "servo_device.h"
 #endif
 
-void vDevicePeriodExecute();
+void vDevicePeriodExecute(void);
 
 #endif

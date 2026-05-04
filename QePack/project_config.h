@@ -16,7 +16,7 @@
 #define ST                  1                           // 占位符
 
 /* ########################### System Configuration ######################### */
-#define QEPACK_PLATFORM   TI                    // 拓展包使用平台
+#define QEPACK_PLATFORM   ST                    // 拓展包使用平台
 #define IS_DEBUG_MODE     1                     // 开启调试模式
 
 #if (QEPACK_PLATFORM == ST) // 设备头文件
