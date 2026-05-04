@@ -82,21 +82,20 @@ void vMotorSystemInit(stMotorSystemStaticParamTdf *pstInit)
  * @brief 使能电机系统控制器
  * @param bEnable 使能状态
  */
-void vMotorSystemEnable(uint8_t bEnable)
-{
+void vMotorSystemEnable(uint8_t bEnable) {
     stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
         case emChassisMecanum4:
-            vMotorEnable(pstStatic->emLeftBackMotorDevNum, bEnable);
-            vMotorEnable(pstStatic->emRightBackMotorDevNum, bEnable);
+            vMotorEnable(pstStatic->emLeftBackMotorDevNum, bEnable, 0);
+            vMotorEnable(pstStatic->emRightBackMotorDevNum, bEnable, 0);
 
         case emChassisDiff2:
             if(pstStatic->emLeftFrontMotorDevNum != emNoMotorDevNum)
-                vMotorEnable(pstStatic->emLeftFrontMotorDevNum, bEnable);
+                vMotorEnable(pstStatic->emLeftFrontMotorDevNum, bEnable, 0);
             if(pstStatic->emRightFrontMotorDevNum != emNoMotorDevNum)
-                vMotorEnable(pstStatic->emRightFrontMotorDevNum, bEnable);
+                vMotorEnable(pstStatic->emRightFrontMotorDevNum, bEnable, 0);
 
             break;
         default:
@@ -107,8 +106,7 @@ void vMotorSystemEnable(uint8_t bEnable)
 /**
  * @brief 停止电机系统控制器
  */
-void vMotorSystemStop(void)
-{
+void vMotorSystemStop() {
     stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
     vMotorSystemSetState(emMotorStateStop);
@@ -116,16 +114,12 @@ void vMotorSystemStop(void)
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
         case emChassisMecanum4:
-            if(pstStatic->emLeftBackMotorDevNum != emNoMotorDevNum)
-                vMotorStop(pstStatic->emLeftBackMotorDevNum);
-            if(pstStatic->emRightBackMotorDevNum != emNoMotorDevNum)
-                vMotorStop(pstStatic->emRightBackMotorDevNum);
+            vMotorStop(pstStatic->emLeftBackMotorDevNum, 0);
+            vMotorStop(pstStatic->emRightBackMotorDevNum, 0);
 
         case emChassisDiff2:
-            if(pstStatic->emLeftFrontMotorDevNum != emNoMotorDevNum)
-                vMotorStop(pstStatic->emLeftFrontMotorDevNum);
-            if(pstStatic->emRightFrontMotorDevNum != emNoMotorDevNum)
-                vMotorStop(pstStatic->emRightFrontMotorDevNum);
+            vMotorStop(pstStatic->emLeftFrontMotorDevNum, 0);
+            vMotorStop(pstStatic->emRightFrontMotorDevNum, 0);
             break;
         default:
             break;
@@ -136,25 +130,21 @@ void vMotorSystemStop(void)
  * @brief 设置电机系统控制器速度
  * @param fSpeed 速度，单位：rpm
  */
-void vMotorSystemSetSpeed(
-    float fLeftFrontSpeed, float fRightFrontSpeed, 
-    float fLeftBackSpeed,  float fRightBackSpeed
+void vMotorSystemVelControl(
+    emMotorDirTdf emDir, uint8_t ucAcc,
+    uint16_t usLeftFrontSpeed, uint16_t usRightFrontSpeed, 
+    uint16_t usLeftBackSpeed,  uint16_t usRightBackSpeed
 ) {
     stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
-            if(pstStatic->emLeftBackMotorDevNum != emNoMotorDevNum)
-                vMotorSetSpeed(pstStatic->emLeftBackMotorDevNum, (int16_t)fLeftBackSpeed);
-            if(pstStatic->emRightBackMotorDevNum != emNoMotorDevNum)
-                vMotorSetSpeed(pstStatic->emRightBackMotorDevNum, (int16_t)fRightBackSpeed);
+            vMotorVelControl(pstStatic->emLeftBackMotorDevNum,emDir,usLeftBackSpeed,ucAcc,1);
+            vMotorVelControl(pstStatic->emRightBackMotorDevNum,emDir,usRightBackSpeed,ucAcc,1);
 
         case emChassisDiff2:
-            if(pstStatic->emLeftFrontMotorDevNum != emNoMotorDevNum)
-                vMotorSetSpeed(pstStatic->emLeftFrontMotorDevNum, (int16_t)fLeftFrontSpeed);
-            if(pstStatic->emRightFrontMotorDevNum != emNoMotorDevNum)
-                vMotorSetSpeed(pstStatic->emRightFrontMotorDevNum, (int16_t)fRightFrontSpeed);
-            
+            vMotorVelControl(pstStatic->emLeftFrontMotorDevNum,emDir,usLeftFrontSpeed,ucAcc,1);
+            vMotorVelControl(pstStatic->emRightFrontMotorDevNum,emDir,usRightFrontSpeed,ucAcc,1);
             break;
         case emChassisMecanum4:
             
@@ -206,8 +196,8 @@ void vMotorSystemSetPose(float fTargetYawDeg, float fOmegaRadS)
 /**
  * @brief 电机系统控制器周期执行
  */
-void vMotorSystemPeriodExecute(void)
-{
+void vMotorSystemPeriodExecute(void) {
+    stMotorSystemStaticParamTdf  *pstStatic = g_stMotorSystemController.stStaticParam;
 
 }
 

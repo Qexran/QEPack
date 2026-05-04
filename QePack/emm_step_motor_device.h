@@ -52,12 +52,6 @@ typedef enum
     emEmmMotorOrgMode_MultiLimit     = 3,    /* 多圈有限位开关回零 */
 } emEmmMotorOrgModeTdf;
 
-/// @brief  EmmMotor方向枚举
-typedef enum
-{
-    emEmmMotorDir_CW  = 0,    /* 顺时针 */
-    emEmmMotorDir_CCW = 1,    /* 逆时针 */
-} emEmmMotorDirTdf;
 
 /// @brief  EmmMotor接收数据回调函数类型
 typedef void (*vEmmMotorRxCallback)(uint8_t ucAddr, uint8_t *pucData, uint16_t usLen);
@@ -91,8 +85,8 @@ typedef struct
 void vEmmMotorInit(void *pstInit);
 void vEmmMotorPeriodExecute(void *pstMotor);
 void vEmmMotorSetSpeed(void *pstMotor, int16_t speed);
-void vEmmMotorStop(void *pstMotor);
-void vEmmMotorEnable(void *pstMotor, uint8_t bEnable);
+void vEmmMotorStop(void *pstMotor, uint8_t bSyncFlag);
+void vEmmMotorEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);
 emMotorStateTdf emGetEmmMotorState(void *pstMotor);
 
 
@@ -100,21 +94,21 @@ emMotorStateTdf emGetEmmMotorState(void *pstMotor);
 void vEmmMotorRegister(emMotorDevNumTdf emDevNum, stEmmMotorStaticParamTdf *pstInit);
 
 /* 原有方法保持不变 */
-void vEmmMotorResetCurPosToZero(emMotorDevNumTdf emDevNum);
-void vEmmMotorResetClogPro(emMotorDevNumTdf emDevNum);
-void vEmmMotorReadSysParams(emMotorDevNumTdf emDevNum, emEmmMotorSysParamTdf emSysParam);
-void vEmmMotorModifyCtrlMode(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmmMotorCtrlModeTdf emCtrlMode);
-void vEmmMotorVelControl(emMotorDevNumTdf emDevNum, emEmmMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint8_t bSyncFlag);
-void vEmmMotorPosControl(emMotorDevNumTdf emDevNum, emEmmMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
-void vEmmMotorSynchronousMotion(emMotorDevNumTdf emDevNum);
-void vEmmMotorOriginSetO(emMotorDevNumTdf emDevNum, uint8_t bSave);
-void vEmmMotorOriginModifyParams(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmmMotorOrgModeTdf emOrgMode, emEmmMotorDirTdf emDir, 
+void vEmmMotorResetCurPosToZero(void *pstMotor);
+void vEmmMotorResetClogPro(void *pstMotor);
+void vEmmMotorReadSysParams(void *pstMotor, emEmmMotorSysParamTdf emSysParam);
+void vEmmMotorModifyCtrlMode(void *pstMotor, uint8_t bSave, emEmmMotorCtrlModeTdf emCtrlMode);
+void vEmmMotorVelControl(void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint8_t bSyncFlag);
+void vEmmMotorPosControl(void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
+void vEmmMotorSynchronousMotion(void *pstMotor);
+void vEmmMotorOriginSetO(void *pstMotor, uint8_t bSave);
+void vEmmMotorOriginModifyParams(void *pstMotor, uint8_t bSave, emEmmMotorOrgModeTdf emOrgMode, emMotorDirTdf emDir, 
                                 uint16_t usOrgVel, uint32_t ulOrgTm, uint16_t usSlVel, uint16_t usSlMa, 
                                 uint16_t usSlMs, uint8_t bPotFlag);
-void vEmmMotorOriginTriggerReturn(emMotorDevNumTdf emDevNum, emEmmMotorOrgModeTdf emOrgMode, uint8_t bSyncFlag);
-void vEmmMotorOriginInterrupt(emMotorDevNumTdf emDevNum);
-void vEmmMotorStopNow(emMotorDevNumTdf emDevNum, uint8_t bSyncFlag);
-void vEmmMotorEnControl(emMotorDevNumTdf emDevNum, uint8_t bEnable, uint8_t bSyncFlag);
+void vEmmMotorOriginTriggerReturn(void *pstMotor, emEmmMotorOrgModeTdf emOrgMode, uint8_t bSyncFlag);
+void vEmmMotorOriginInterrupt(void *pstMotor);
+void vEmmMotorStopNow(void *pstMotor, uint8_t bSyncFlag);
+void vEmmMotorEnControl(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);
 
 #endif
 #endif

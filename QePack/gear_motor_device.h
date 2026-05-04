@@ -30,6 +30,8 @@ typedef struct
         uint32_t            u32DirPin1;              // 检测编码器方向的 GPIO_PIN_1
         GPIO_Regs           *pstDir2GpioBase;        // 检测编码器方向的 GPIOx
         uint32_t            u32DirPin2;              // 检测编码器方向的 GPIO_PIN_2
+        GPIO_Regs           *pstStbyGpioBase;        // 电机待机引脚对应的GPIOX
+        uint32_t            u32StbyPin;               // 电机待机引脚的GPIO_PIN号
 	#else
    		TIM_HandleTypeDef *pstPWM_htim;         // 电机PWM使用的定时器
         uint32_t u32PWM_Channel;                // PWM输出通道
@@ -72,13 +74,20 @@ stGearMotorDeviceParamTdf;
 void vGearMotorInit(void *pstInit);
 void vGearMotorPeriodExecute(void *pstMotor);
 void vGearMotorSetSpeed(void *pstMotor, int16_t speed);
-void vGearMotorStop(void *pstMotor);
-void vGearMotorEnable(void *pstMotor, uint8_t bEnable);
+void vGearMotorStop(void *pstMotor, uint8_t bSyncFlag);
+void vGearMotorEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);
 emMotorStateTdf emGetGearMotorState(void *pstMotor);
 
 /* 减速电机注册函数 */
 void vGearMotorRegister(emMotorDevNumTdf emDevNum, stGearMotorStaticParamTdf *pstInit);
 
+void vGearMotorPosControl(
+    void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
+    
+void vGearMotorVelControl(
+    void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint8_t bSyncFlag);
 #endif
 
 #endif

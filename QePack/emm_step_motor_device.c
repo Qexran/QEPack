@@ -14,25 +14,6 @@ stEmmMotorDeviceParamTdf astEmmMotorDeviceParam[EMM_MOTOR_DEV_NUM];
 
 #define EMM_MOTOR_CMD_END_MARK 0x6B
 
-/**
- * @brief  通用命令发送辅助函数
- * @param  pstEmmMotor ：EmmMotor设备指针
- * @param  ucAddr ：电机地址
- * @param  pucCmdData ：命令数据指针
- * @param  ucDataLen ：命令数据长度（不含地址字节和结束标志）
- */
-/**
- * @brief  根据设备号获取EmmMotor设备指针
- * @param  emDevNum ：设备号
- * @return stEmmMotorDeviceParamTdf* 设备指针，NULL表示无效
- */
-static stEmmMotorDeviceParamTdf* pstEmmMotorGetByDevNum(emMotorDevNumTdf emDevNum) {
-    emMotorDevNumTdf offsetDevNum = emDevNum - emEmmMotorDevNum0;
-    if (offsetDevNum < EMM_MOTOR_DEV_NUM) {
-        return &astEmmMotorDeviceParam[offsetDevNum];
-    }
-    return NULL;
-}
 
 /**
  * @brief  通用命令发送辅助函数
@@ -60,17 +41,21 @@ static void vEmmMotorSendCmd(
  * @brief EmmMotor虚方法表
  */
 static stMotorVTableTdf g_stEmmMotorVTable = {
-    vEmmMotorInit,
-    vEmmMotorPeriodExecute,
-    vEmmMotorSetSpeed,
-    vEmmMotorStop,
-    vEmmMotorEnable,
-    emGetEmmMotorState
+    vEmmMotorInit,              /* 对应vInit(void *pstInit); */
+    vEmmMotorPeriodExecute,     /* 对应vPeriodExecute(void *pstPeriodExecute); */
+    vEmmMotorStop,              /* 对应vStop(void *pstMotor, uint8_t bSyncFlag); */
+    vEmmMotorEnable,            /* 对应vEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag); */
+    emGetEmmMotorState,         /* 对应emGetEmmMotorState(void *pstMotor); */
+    vEmmMotorPosControl,        /* 对应vPosControl(...); */
+    vEmmMotorVelControl,        /* 对应vVelControl(...); */
 };
+
+/* 虚方法实现 ************************************* */
 
 /**
  * @brief  EmmMotor初始化
  * @param  pstInit ：EmmMotor设备指针
+ * @note   实现父类方法 vInit(void *pstInit);
  */
 void vEmmMotorInit(void *pstInit)
 {
@@ -88,6 +73,7 @@ void vEmmMotorInit(void *pstInit)
 /**
  * @brief  EmmMotor周期执行
  * @param  pstMotor ：EmmMotor设备指针
+ * @note   实现父类方法 vPeriodExecute(void *pstPeriodExecute);
  */
 void vEmmMotorPeriodExecute(void *pstMotor)
 {
@@ -111,9 +97,29 @@ void vEmmMotorPeriodExecute(void *pstMotor)
 }
 
 /**
+ * @brief  EmmMotor使能控制
+ * @param  pstMotor ：EmmMotor设备指针
+ * @param  bEnable ：使能状态
+ * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
+ * @note   实现父类方法 vEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);
+ */
+void vEmmMotorEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag)
+{
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
+    if (pstEmmMotor == NULL) {
+        return;
+    }
+    
+    const uint8_t aucCmdData[] = {0xF3, 0xAB, bEnable, bSyncFlag};
+    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
+}
+
+
+/**
  * @brief 获取EmmMotor电机运动状态
  * @param pstMotor EmmMotor电机设备指针
  * @return emMotorStateTdf 电机运动状态
+ * @note   实现父类方法 emGetEmmMotorState(void *pstMotor);
  */
 emMotorStateTdf emGetEmmMotorState(void *pstMotor) {
     stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
@@ -122,6 +128,74 @@ emMotorStateTdf emGetEmmMotorState(void *pstMotor) {
     }
     return pstEmmMotor->stBase.emMotorState;
 }
+
+/**
+ * @brief  位置模式控制
+ * @param  pstMotor ：EmmMotor设备指针
+ * @param  emDir ：方向
+ * @param  usVel ：速度(RPM)，范围0 - 5000RPM
+ * @param  ucAcc ：加速度，范围0 - 255，注意：0是直接启动
+ * @param  ulClk ：脉冲数，范围0- (2^32 - 1)个
+ * @param  bAbsFlag ：相位/绝对标志，false为相对运动，true为绝对值运动
+ * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
+ * @note   实现父类方法 vPosControl(...);
+ */
+void vEmmMotorPosControl(
+    void *pstMotor, emMotorDirTdf emDir, 
+    uint16_t usVel, uint8_t ucAcc, uint32_t ulClk, uint8_t bAbsFlag, 
+    uint8_t bSyncFlag)
+{
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
+    if (pstEmmMotor == NULL) {
+        return;
+    }
+    
+    const uint8_t aucCmdData[] = {
+        0xFD,
+        emDir,
+        (uint8_t)(usVel >> 8),
+        (uint8_t)(usVel >> 0),
+        ucAcc,
+        (uint8_t)(ulClk >> 24),
+        (uint8_t)(ulClk >> 16),
+        (uint8_t)(ulClk >> 8),
+        (uint8_t)(ulClk >> 0),
+        bAbsFlag,
+        bSyncFlag
+    };
+    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
+}
+
+
+/**
+ * @brief  速度模式控制
+ * @param  pstMotor ：EmmMotor设备指针
+ * @param  emDir ：方向
+ * @param  usVel ：速度，范围0 - 5000RPM
+ * @param  ucAcc ：加速度，范围0 - 255，注意：0是直接启动
+ * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
+ * @note   实现父类方法 vVelControl(...);
+ */
+void vEmmMotorVelControl(void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint8_t bSyncFlag)
+{
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
+    if (pstEmmMotor == NULL) {
+        return;
+    }
+    
+    const uint8_t aucCmdData[] = {
+        0xF6,
+        emDir,
+        (uint8_t)(usVel >> 8),
+        (uint8_t)(usVel >> 0),
+        ucAcc,
+        bSyncFlag
+    };
+    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
+}
+
+/******************************************************/
+
 
 /**
  * @brief  设置EmmMotor速度
@@ -135,21 +209,21 @@ void vEmmMotorSetSpeed(void *pstMotor, int16_t speed)
         return;
     }
     
-    emEmmMotorDirTdf emDir = (speed >= 0) ? emEmmMotorDir_CW : emEmmMotorDir_CCW;
+    emMotorDirTdf emDir = (speed >= 0) ? emMotorDir_Forward : emMotorDir_Backward;
     uint16_t usVel = (speed < 0) ? -speed : speed;
     
     // 调用速度控制函数
-    vEmmMotorVelControl(pstEmmMotor->emDevNum, emDir, usVel, 10, 0);
+    vEmmMotorVelControl(pstMotor, emDir, usVel, 10, 0);
 }
 
 /**
- * @brief  让电机立即停止运动
- * @param  emDevNum ：设备号
+ * @brief  停止EmmMotor
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
  */
-void vEmmMotorStopNow(emMotorDevNumTdf emDevNum, uint8_t bSyncFlag)
+void vEmmMotorStop(void *pstMotor, uint8_t bSyncFlag)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -159,53 +233,6 @@ void vEmmMotorStopNow(emMotorDevNumTdf emDevNum, uint8_t bSyncFlag)
 }
 
 
-/**
- * @brief  停止EmmMotor
- * @param  pstMotor ：EmmMotor设备指针
- */
-void vEmmMotorStop(void *pstMotor)
-{
-    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
-    if (pstEmmMotor == NULL) {
-        return;
-    }
-    
-    vEmmMotorStopNow(pstEmmMotor->emDevNum, 0);
-}
-
-
-
-/**
- * @brief  电机使能控制
- * @param  emDevNum ：设备号
- * @param  bEnable ：使能状态，true为使能电机，false为关闭电机
- * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
- */
-void vEmmMotorEnControl(emMotorDevNumTdf emDevNum, uint8_t bEnable, uint8_t bSyncFlag)
-{
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
-    if (pstEmmMotor == NULL) {
-        return;
-    }
-    
-    const uint8_t aucCmdData[] = {0xF3, 0xAB, bEnable, bSyncFlag};
-    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
-}
-
-/**
- * @brief  EmmMotor使能控制
- * @param  pstMotor ：EmmMotor设备指针
- * @param  bEnable ：使能状态
- */
-void vEmmMotorEnable(void *pstMotor, uint8_t bEnable)
-{
-    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
-    if (pstEmmMotor == NULL) {
-        return;
-    }
-    
-    vEmmMotorEnControl(pstEmmMotor->emDevNum, bEnable, 0);
-}
 
 /**
  * @brief  注册EmmMotor设备
@@ -238,11 +265,11 @@ void vEmmMotorRegister(emMotorDevNumTdf emDevNum, stEmmMotorStaticParamTdf *pstI
 
 /**
  * @brief  将当前位置清零
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  */
-void vEmmMotorResetCurPosToZero(emMotorDevNumTdf emDevNum)
+void vEmmMotorResetCurPosToZero(void *pstMotor)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -253,11 +280,11 @@ void vEmmMotorResetCurPosToZero(emMotorDevNumTdf emDevNum)
 
 /**
  * @brief  解除堵转保护
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  */
-void vEmmMotorResetClogPro(emMotorDevNumTdf emDevNum)
+void vEmmMotorResetClogPro(void *pstMotor)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -268,12 +295,12 @@ void vEmmMotorResetClogPro(emMotorDevNumTdf emDevNum)
 
 /**
  * @brief  读取系统参数
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  emSysParam ：系统参数类型
  */
-void vEmmMotorReadSysParams(emMotorDevNumTdf emDevNum, emEmmMotorSysParamTdf emSysParam)
+void vEmmMotorReadSysParams(void *pstMotor, emEmmMotorSysParamTdf emSysParam)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -316,13 +343,13 @@ void vEmmMotorReadSysParams(emMotorDevNumTdf emDevNum, emEmmMotorSysParamTdf emS
 
 /**
  * @brief  修改开环/闭环控制模式
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  bSave ：存储标志
  * @param  emCtrlMode ：控制模式
  */
-void vEmmMotorModifyCtrlMode(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmmMotorCtrlModeTdf emCtrlMode)
+void vEmmMotorModifyCtrlMode(void *pstMotor, uint8_t bSave, emEmmMotorCtrlModeTdf emCtrlMode)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -333,73 +360,15 @@ void vEmmMotorModifyCtrlMode(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmmMoto
 
 
 
-/**
- * @brief  速度模式控制
- * @param  emDevNum ：设备号
- * @param  emDir ：方向
- * @param  usVel ：速度，范围0 - 5000RPM
- * @param  ucAcc ：加速度，范围0 - 255，注意：0是直接启动
- * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
- */
-void vEmmMotorVelControl(emMotorDevNumTdf emDevNum, emEmmMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint8_t bSyncFlag)
-{
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
-    if (pstEmmMotor == NULL) {
-        return;
-    }
-    
-    const uint8_t aucCmdData[] = {
-        0xF6,
-        emDir,
-        (uint8_t)(usVel >> 8),
-        (uint8_t)(usVel >> 0),
-        ucAcc,
-        bSyncFlag
-    };
-    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
-}
-
-/**
- * @brief  位置模式控制
- * @param  emDevNum ：设备号
- * @param  emDir ：方向
- * @param  usVel ：速度(RPM)，范围0 - 5000RPM
- * @param  ucAcc ：加速度，范围0 - 255，注意：0是直接启动
- * @param  ulClk ：脉冲数，范围0- (2^32 - 1)个
- * @param  bAbsFlag ：相位/绝对标志，false为相对运动，true为绝对值运动
- * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
- */
-void vEmmMotorPosControl(emMotorDevNumTdf emDevNum, emEmmMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag)
-{
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
-    if (pstEmmMotor == NULL) {
-        return;
-    }
-    
-    const uint8_t aucCmdData[] = {
-        0xFD,
-        emDir,
-        (uint8_t)(usVel >> 8),
-        (uint8_t)(usVel >> 0),
-        ucAcc,
-        (uint8_t)(ulClk >> 24),
-        (uint8_t)(ulClk >> 16),
-        (uint8_t)(ulClk >> 8),
-        (uint8_t)(ulClk >> 0),
-        bAbsFlag,
-        bSyncFlag
-    };
-    vEmmMotorSendCmd(pstEmmMotor, aucCmdData, sizeof(aucCmdData));
-}
 
 
 /**
  * @brief  触发多机同步开始运动
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  */
-void vEmmMotorSynchronousMotion(emMotorDevNumTdf emDevNum)
+void vEmmMotorSynchronousMotion(void *pstMotor)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -410,12 +379,12 @@ void vEmmMotorSynchronousMotion(emMotorDevNumTdf emDevNum)
 
 /**
  * @brief  设置单圈回零的零点位置
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  bSave ：是否存储标志，false为不存储，true为存储
  */
-void vEmmMotorOriginSetO(emMotorDevNumTdf emDevNum, uint8_t bSave)
+void vEmmMotorOriginSetO(void *pstMotor, uint8_t bSave)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -426,7 +395,7 @@ void vEmmMotorOriginSetO(emMotorDevNumTdf emDevNum, uint8_t bSave)
 
 /**
  * @brief  修改回零参数
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  bSave ：是否存储标志，false为不存储，true为存储
  * @param  emOrgMode ：回零模式
  * @param  emDir ：回零方向
@@ -437,11 +406,11 @@ void vEmmMotorOriginSetO(emMotorDevNumTdf emDevNum, uint8_t bSave)
  * @param  usSlMs ：无限位碰撞回零检测时间，单位：Ms（毫秒）
  * @param  bPotFlag ：上电自动触发回零，false为不使能，true为使能
  */
-void vEmmMotorOriginModifyParams(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmmMotorOrgModeTdf emOrgMode, emEmmMotorDirTdf emDir, 
+void vEmmMotorOriginModifyParams(void *pstMotor, uint8_t bSave, emEmmMotorOrgModeTdf emOrgMode, emMotorDirTdf emDir, 
                                uint16_t usOrgVel, uint32_t ulOrgTm, uint16_t usSlVel, uint16_t usSlMa, 
                                uint16_t usSlMs, uint8_t bPotFlag)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -471,13 +440,13 @@ void vEmmMotorOriginModifyParams(emMotorDevNumTdf emDevNum, uint8_t bSave, emEmm
 
 /**
  * @brief  触发回零
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  * @param  emOrgMode ：回零模式
  * @param  bSyncFlag ：多机同步标志，false为不启用，true为启用
  */
-void vEmmMotorOriginTriggerReturn(emMotorDevNumTdf emDevNum, emEmmMotorOrgModeTdf emOrgMode, uint8_t bSyncFlag)
+void vEmmMotorOriginTriggerReturn(void *pstMotor, emEmmMotorOrgModeTdf emOrgMode, uint8_t bSyncFlag)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }
@@ -488,11 +457,11 @@ void vEmmMotorOriginTriggerReturn(emMotorDevNumTdf emDevNum, emEmmMotorOrgModeTd
 
 /**
  * @brief  强制中断并退出回零
- * @param  emDevNum ：设备号
+ * @param  pstMotor ：EmmMotor设备指针
  */
-void vEmmMotorOriginInterrupt(emMotorDevNumTdf emDevNum)
+void vEmmMotorOriginInterrupt(void *pstMotor)
 {
-    stEmmMotorDeviceParamTdf *pstEmmMotor = pstEmmMotorGetByDevNum(emDevNum);
+    stEmmMotorDeviceParamTdf *pstEmmMotor = (stEmmMotorDeviceParamTdf *)pstMotor;
     if (pstEmmMotor == NULL) {
         return;
     }

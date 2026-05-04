@@ -83,7 +83,7 @@ typedef enum
 
 /**
  * @brief          电机方向枚举
- * @note 
+ * @note           对于EMM电机，正转方向为顺时针转
  */
 typedef enum
 {
@@ -97,12 +97,17 @@ typedef enum
  */
 typedef struct stMotorVTableTdf
 {
-    void (*vInit)(void *pstInit);                                   /* 初始化 */
-    void (*vPeriodExecute)(void *pstMotor);                         /* 周期执行 */
-    void (*vSetSpeed)(void *pstMotor, int16_t speed);               /* 设置速度 */
-    void (*vStop)(void *pstMotor);                                  /* 停止 */
-    void (*vEnable)(void *pstMotor, uint8_t bEnable);               /* 使能控制 */
-    emMotorStateTdf (*emGetState)(void *pstMotor);                  /* 获取电机状态 */
+    void (*vInit)(void *pstInit);                                               /* 初始化 */
+    void (*vPeriodExecute)(void *pstMotor);                                     /* 周期执行 */
+    void (*vStop)(void *pstMotor, uint8_t bSyncFlag);                           /* 停止，bSyncFlag为多机同步标志 */
+    void (*vEnable)(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);        /* 使能控制，bSyncFlag为多机同步标志 */
+    emMotorStateTdf (*emGetState)(void *pstMotor);                              /* 获取电机状态 */
+    void (*vPosControl)(    
+        void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,     
+        uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);                   /* 位置控制 */
+    void (*vVelControl)(    
+        void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,     
+        uint8_t bSyncFlag);                                                     /* 速度控制 */
 } stMotorVTableTdf;
 
 
@@ -127,11 +132,13 @@ extern stMotorDeviceTdf* g_astMotorDevices[emMotorDevMax];
  */
 void vMotorRegisterDevice(uint8_t emDevNum, stMotorDeviceTdf *pstMotor);
 
+
 /**
  * @brief          电机初始化
  * @param  emDevNum ：电机设备号
  */
 void vMotorInit(uint8_t emDevNum);
+
 
 /**
  * @brief          电机周期执行
@@ -139,27 +146,56 @@ void vMotorInit(uint8_t emDevNum);
  */
 void vMotorPeriodExecute(uint8_t emDevNum);
 
-/**
- * @brief          设置电机速度
- * @param  emDevNum ：电机设备号
- * @param  speed ：速度值
- */
-void vMotorSetSpeed(uint8_t emDevNum, int16_t speed);
 
 /**
  * @brief          停止电机
- * @param  emDevNum ：电机设备号
+     * @param  emDevNum ：电机设备号
  */
-void vMotorStop(uint8_t emDevNum);
+void vMotorStop(uint8_t emDevNum, uint8_t bSyncFlag);
+
 
 /**
  * @brief          电机使能控制
  * @param  emDevNum ：电机设备号
  * @param  bEnable ：使能状态
+ * @param  bSyncFlag ：同步标志
  */
-void vMotorEnable(uint8_t emDevNum, uint8_t bEnable);
+void vMotorEnable(uint8_t emDevNum, uint8_t bEnable, uint8_t bSyncFlag);
 
+/**
+ * @brief          获取电机状态
+ * @param  emDevNum ：电机设备号
+ * @return         电机状态枚举
+ */
 emMotorStateTdf emGetMotorState(uint8_t emDevNum);
+
+
+/**
+ * @brief          电机速度控制
+ * @param  emDevNum ：电机设备号
+ * @param  emDir ：电机方向
+ * @param  usVel ：速度值
+ * @param  ucAcc ：加速度
+ * @param  bSyncFlag ：同步标志
+ */
+void vMotorVelControl(
+    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint8_t bSyncFlag);
+
+
+/**
+ * @brief          电机位置控制
+ * @param  emDevNum ：电机设备号
+ * @param  emDir ：电机方向
+ * @param  usVel ：速度值
+ * @param  ucAcc ：加速度
+ * @param  ulClk ：脉冲数
+ * @param  bAbsFlag ：绝对位置标志
+ * @param  bSyncFlag ：同步标志
+ */
+void vMotorPosControl(
+    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
 #endif
 
 #endif
