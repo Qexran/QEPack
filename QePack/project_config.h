@@ -21,7 +21,7 @@
 
 #if (QEPACK_PLATFORM == ST) // 设备头文件
     #include					"stm32f1xx_hal.h"			    
-    #include					"stm32f1xx_hal_def.h
+    #include					"stm32f1xx_hal_def.h"
 #else
     #include          "ti_platform.h"
     #include          <ti/driverlib/dl_flashctl.h>
