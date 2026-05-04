@@ -213,7 +213,7 @@ uint32_t ulTimerGetRemaining(emTimerDevNumTdf emDevNum)
     }
 #else
     void v1MSTimerBaseInit(TIM_HandleTypeDef *htim){
-        HAL_TIM_Base_Start_IT(&htim);
+        HAL_TIM_Base_Start_IT(htim);
     }
 #endif
 

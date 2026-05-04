@@ -93,14 +93,22 @@ const stLinerCcdDeviceParamTdf *c_pstGetLinerCcdDeviceParam(emLinerCcdDevNumTdf 
 /* 初始化函数 */
 void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf emDevNum);
 
-/* 数据采集函数 */
-TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
+#if (QEPACK_PLATFORM == TI)
+    /* 数据采集函数 */
+    TI_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
+    /* 阈值计算函数 */
+    TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
+    /* 中线检测函数 */
+    TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
+#else
+    /* 数据采集函数 */
+    HAL_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum);
+    /* 阈值计算函数 */
+    HAL_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
+    /* 中线检测函数 */
+    HAL_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
+#endif
 
-/* 阈值计算函数 */
-TI_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum);
-
-/* 中线检测函数 */
-TI_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum);
 
 /* 获取像素数据 */
 const uint16_t *pusLinerCcdGetPixelData(emLinerCcdDevNumTdf emDevNum);
