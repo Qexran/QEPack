@@ -31,8 +31,6 @@ typedef enum
 typedef struct
 {
     emUartDevNumTdf      emUartDevNum;
-    char                 cName[32];
-    char                 cPin[8];
 } stHC05StaticParamTdf;
 
 /* 初始化 */
