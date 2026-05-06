@@ -56,7 +56,7 @@ void vHC05SetPin(emHC05DevNumTdf emDevNum, char *pcPin)
 /**
  * @brief  设置波特率
  */
-void vHC05SetBaudRate(emHC05DevNumTdf emDevNum, uint32_t ulBaudRate)
+void vHC05SetBaudRate(emHC05DevNumTdf emDevNum, unsigned long ulBaudRate)
 {
     char cCmd[64];
     if (emDevNum >= HC05_DEV_NUM) return;

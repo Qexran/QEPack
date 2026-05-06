@@ -12,6 +12,10 @@
 #ifndef _KEY_DEVICE_H_
 #define _KEY_DEVICE_H_
 
+#if (QEPACK_PLATFORM == TI)
+    #include "ti_platform.h"
+#endif
+
 #include "string.h"
 
 /// @brief          按键设备号枚举

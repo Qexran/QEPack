@@ -9,6 +9,7 @@
 #if HC05_IS_ENABLE
 
 #include "uart_device.h"
+#include "string.h"
 
 /// @brief  HC05设备号枚举
 typedef enum
@@ -42,7 +43,7 @@ void vHC05SendATCmd(emHC05DevNumTdf emDevNum, char *pcCmd);
 /* 配置 */
 void vHC05SetName(emHC05DevNumTdf emDevNum, char *pcName);
 void vHC05SetPin(emHC05DevNumTdf emDevNum, char *pcPin);
-void vHC05SetBaudRate(emHC05DevNumTdf emDevNum, uint32_t ulBaudRate);
+void vHC05SetBaudRate(emHC05DevNumTdf emDevNum, unsigned long ulBaudRate);
 void vHC05SetRole(emHC05DevNumTdf emDevNum, emHC05RoleTdf emRole);
 void vHC05Reset(emHC05DevNumTdf emDevNum);
 void vHC05RestoreDefault(emHC05DevNumTdf emDevNum);
