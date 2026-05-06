@@ -48,7 +48,7 @@ typedef enum
 /* ########################### Device Section ############################### */
 
 /* LED 相关 */
-#define LED_IS_ENABLE									1							// LED 模块开关
+#define LED_IS_ENABLE									0							// LED 模块开关
 #define LED_DEV_NUM                                     1                           // LED 设备数量
 #define LED0                                            emLedDevNum0
 #define LED1                                            emLedDevNum1
@@ -73,7 +73,7 @@ typedef enum
 #define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
 #define UART_TX_QUEUE_MAX_LEN 							256  						// UART 发送队列最大长度，可根据需求调整
 #define UART_TX_BUF_MAX_LEN 							512   						// UART vUartPrintf格式化缓冲区长度
-#define UART_IS_USE_DMA		  							0             				// UART 是否使用DMA传输（正常模式）
+#define UART_IS_USE_DMA		  							1             				// UART 是否使用DMA传输（正常模式）
 #define UART_DEVICE_0                                           emUartDevNum0
 #define UART_DEVICE_1                                           emUartDevNum1
 
@@ -94,7 +94,7 @@ typedef enum
 
 
 /* 舵机 相关 */
-#define SERVO_IS_ENABLE								    1								// 舵机模块总开关
+#define SERVO_IS_ENABLE								    0								// 舵机模块总开关
 #define SERVO_DEV_NUM        						    1               				// 舵机设备数量
 #define SERVO_DEFAULT_PWM_FREQ						    50.0f							// 舵机默认PWM频率(Hz)，常规50Hz
 										// 180°角度型舵机默认参数 [使用 vServoDeviceDefaultInit_Angle() ]
@@ -112,7 +112,7 @@ typedef enum
 #define SERVO1                                          emServoDevNum1
 
 /* ADC 相关 */
-#define ADC_DEVICE_IS_ENABLE							    1								// ADC 模块总开关
+#define ADC_DEVICE_IS_ENABLE							0								// ADC 模块总开关
 #define ADC_IS_USE_DMA                                  0                               // ADC 是否使用DMA功能
 #define ADC_RESOLUTION                                  4095                            // ADC 精度(12位: 2^12 - 1)
 #define ADC_VREF                                        3.3                             // ADC 电压
@@ -121,7 +121,7 @@ typedef enum
 #define ADC_0                                           emAdcDevNum0
 
 /* 编码器 相关 */
-#define ENCODER_IS_ENABLE                               1                               // 编码器 模块总开关
+#define ENCODER_IS_ENABLE                               0                               // 编码器 模块总开关
 #define ENCODER_HANDLE_FREQ                             50                              // 编码器处理数据的时间 (ms)
 #define ENCODER_IS_USE_PARASITISM                       0                               // 使用寄生的定时器处理数据
                             /* tips:对于GPIO模式，应一引脚设置外部中断，一引脚设置输入模式 */
@@ -130,7 +130,7 @@ typedef enum
 #define ENCODER_0                                       emEncoderDevNum0
 
 /* 线性CCD 相关 */
-#define LINEAR_CCD_IS_ENABLE                            1                               // 线性CCD 模块总开关
+#define LINEAR_CCD_IS_ENABLE                            0                               // 线性CCD 模块总开关
 #define LINER_CCD_DEV_NUM                               1                               // 线性CCD 设备数量
 #define LINER_CCD_PIXEL_COUNT                           128                             // 线性CCD 像素数量
 #define LINER_CCD_EXPOSURE_TIME                         2                               // 线性CCD 曝光时间
@@ -140,7 +140,7 @@ typedef enum
 #define LINER_CCD0                                      emLinerCcdDevNum0
 
 /* 灰度传感器 相关 */
-#define GRAY_SENSOR_IS_ENABLE                           1                               // 灰度传感器 模块总开关
+#define GRAY_SENSOR_IS_ENABLE                           0                               // 灰度传感器 模块总开关
 #define GRAY_SENSOR_DEV_NUM                             1                               // 灰度传感器 设备数量
 #define GRAY_SENSOR0                                    emGraySensorDevNum0
 #define GRAY_SENSOR_BACKUP_LENGTH                       2                               // 均值滤波历史长度
@@ -148,7 +148,7 @@ typedef enum
 #define GRAY_SENSOR_DIRECTION                           0                               // 灰度矫正方向
 
 /* PID 相关 */
-#define PID_IS_ENABLE                                   1                               // PID 模块总开关
+#define PID_IS_ENABLE                                   0                               // PID 模块总开关
 #define PID_DEV_NUM                                     2                               // PID 设备数量
 #define PID0                                            emPidDevNum0
 #define PID1                                            emPidDevNum1
@@ -158,7 +158,7 @@ typedef enum
 #define MOTOR_DEV_NUM                                   8                               // 电机设备总数
 
 /* 直流减速电机 相关 */
-#define GEAR_MOTOR_IS_ENABLE                              1                               // 减速电机 模块总开关
+#define GEAR_MOTOR_IS_ENABLE                              0                               // 减速电机 模块总开关
 #define GEAR_MOTOR_DEV_NUM                                4                               // 减速电机 设备数量
 #define MOTOR_GEAR0                                     emGearMotorDevNum0
 #define MOTOR_GEAR1                                     emGearMotorDevNum1
@@ -174,7 +174,7 @@ typedef enum
 #define MOTOR_EMM3                                      emEmmMotorDevNum3
 
 /* 电机系统控制器 相关 */
-#define MOTOR_SYSTEM_CONTROLLER_IS_ENABLE                  1                               // 电机系统控制器 模块总开关
+#define MOTOR_SYSTEM_CONTROLLER_IS_ENABLE                  0                               // 电机系统控制器 模块总开关
 #define MOTOR_SYSTEM_CONTROLLER_DEV_NUM                  1                               // 电机系统控制器 设备数量
 #define MSC0                                             emMotorSystemDevNum0
 #define MOTOR_SYSTEM_CONTROLLER_PERIOD_MS                  10                              // 电机系统控制器 周期 (ms)
@@ -194,6 +194,16 @@ typedef enum
 #define W25Q64_PAGE_SIZE                                256                             // W25Q64 页大小（256B）
 #define W25Q64_TOTAL_SIZE                               (8 * 1024 * 1024)             // W25Q64 总容量（8MB）
 #define W25Q640                                         emW25q64DevNum0
+
+/** QMC5883 相关 */
+#define QMC5883_IS_ENABLE                               0                               // QMC5883 模块总开关
+#define QMC_DEV_NUM                                     1                               // QMC5883 设备数量
+
+/** HC05 蓝牙模块 相关 */
+#define HC05_IS_ENABLE                                  1                               // HC05 蓝牙模块总开关
+#define HC05_DEV_NUM                                    1                               // HC05 设备数量
+#define HC05_RX_BUF_MAX_LEN                             256                             // HC05 接收缓冲区最大长度
+#define HC050                                           emHC05DevNum0
 
 /** QMC5883 相关 */
 #define QMC5883_IS_ENABLE                               0                               // QMC5883 模块总开关
