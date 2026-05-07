@@ -13,17 +13,18 @@
 static stStepDevParamTdf astStepDev[STEP_M_NUM] = {0};
 
 /**
- * @brief 静态函数:根据步骤ID查找步骤缓存
+ * @brief 静态函数:根据步骤ID查找索引
+ * @return 找到返回索引，否则返回 0xFF
  */
-static stStepItemTdf *pstStepFind(emSmStepDevTdf emDevNum, uint16_t stepId)
+static uint8_t u8StepFindIndex(emSmStepDevTdf emDevNum, uint16_t stepId)
 {
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
     for (uint8_t i = 0; i < pstDev->stepTotal; i++) {
         if (pstDev->tSteps[i].stepId == stepId) {
-            return &pstDev->tSteps[i];
+            return i;
         }
     }
-    return NULL;
+    return 0xFF;
 }
 
 /**
@@ -46,6 +47,35 @@ static uint8_t u8StepCheckTimeout(stStepItemTdf *pstItem, uint32_t startTick)
 {
     if (pstItem->timeoutMs == 0) return 0;
     return (HAL_GetTick() - startTick >= pstItem->timeoutMs) ? 1 : 0;
+}
+
+/**
+ * @brief 静态函数:执行步骤切换
+ */
+static void vStepSwitch(emSmStepDevTdf emDevNum, uint16_t nextStep)
+{
+    stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
+    pstDev->curStep = nextStep;
+    pstDev->curStepIndex = u8StepFindIndex(emDevNum, nextStep);
+    pstDev->stepStartTick = HAL_GetTick();
+}
+
+/**
+ * @brief 静态函数:处理错误跳转（避免代码重复）
+ * @return 1=已跳转 0=没有错误步骤直接返回Error状态
+ */
+static uint8_t u8StepHandleError(emSmStepDevTdf emDevNum, stStepItemTdf *pstCurStep)
+{
+    uint16_t nextStep = u16StepFindNext(pstCurStep, emStepRetError);
+    if (nextStep != 0xFFFF && u8StepFindIndex(emDevNum, nextStep) != 0xFF) {
+        vStepSwitch(emDevNum, nextStep);
+        return 1;
+    }
+    if (u8StepFindIndex(emDevNum, 0xFF) != 0xFF) {
+        vStepSwitch(emDevNum, 0xFF);
+        return 1;
+    }
+    return 0;
 }
 
 /**
@@ -87,8 +117,11 @@ void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, int 
             pstStep->tRules[j].nextStep = (uint16_t)va_arg(ap, int);
         }
 
-        // 初始化默认当前步骤
-        if (i == 0) pstDev->curStep = pstStep->stepId;
+        // 初始化默认当前步骤和缓存索引
+        if (i == 0) {
+            pstDev->curStep = pstStep->stepId;
+            pstDev->curStepIndex = 0;
+        }
     }
 
     va_end(ap); // 结束可变参数解析
@@ -103,6 +136,7 @@ void vStepReset(emSmStepDevTdf emDevNum)
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
     pstDev->mState = emStepMStateIdle;
     pstDev->curStep = pstDev->tSteps[0].stepId; // 回到第一个步骤
+    pstDev->curStepIndex = 0; // 第一个步骤的索引总是0
     pstDev->stepStartTick = 0;
 }
 
@@ -147,8 +181,32 @@ uint16_t u16StepGetCurStep(emSmStepDevTdf emDevNum)
 }
 
 /**
- * @brief 核心处理函数
- * @note  单次调用单次处理,自动完成「步骤执行→结果判断→步骤切换」
+ * @brief 周期执行函数(1ms定时器调用)
+ * @note  负责超时检测，与vStepProcess分离，确保计时独立准确
+ */
+void vStepPeriodExecute(emSmStepDevTdf emDevNum)
+{
+    if (emDevNum >= STEP_M_NUM) return;
+    stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
+    if (pstDev->mState != emStepMStateRunning) return;
+
+    // 使用缓存的索引，避免每次遍历查找
+    if (pstDev->curStepIndex >= pstDev->stepTotal) {
+        pstDev->mState = emStepMStateError;
+        return;
+    }
+    stStepItemTdf *pstCurStep = &pstDev->tSteps[pstDev->curStepIndex];
+
+    if (u8StepCheckTimeout(pstCurStep, pstDev->stepStartTick)) {
+        if (!u8StepHandleError(emDevNum, pstCurStep)) {
+            pstDev->mState = emStepMStateError;
+        }
+    }
+}
+
+/**
+ * @brief 核心处理函数(主循环调用)
+ * @note  负责步骤执行，与vStepPeriodExecute分离
  */
 void vStepProcess(emSmStepDevTdf emDevNum)
 {
@@ -156,50 +214,44 @@ void vStepProcess(emSmStepDevTdf emDevNum)
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
     if (pstDev->mState != emStepMStateRunning) return;
 
-    // 1. 查找当前步骤缓存
-    stStepItemTdf *pstCurStep = pstStepFind(emDevNum, pstDev->curStep);
-    if (pstCurStep == NULL || pstCurStep->pfExec == NULL) {
+    // 使用缓存的索引，避免每次遍历查找
+    if (pstDev->curStepIndex >= pstDev->stepTotal) {
+        pstDev->mState = emStepMStateError;
+        return;
+    }
+    stStepItemTdf *pstCurStep = &pstDev->tSteps[pstDev->curStepIndex];
+
+    if (pstCurStep->pfExec == NULL) {
         pstDev->mState = emStepMStateError;
         return;
     }
 
-    // 2. 超时检测
-    if (u8StepCheckTimeout(pstCurStep, pstDev->stepStartTick)) {
-        pstDev->mState = emStepMStateError;
-        return;
-    }
-
-    // 3. 执行步骤回调
     emStepRetTdf stepRet = pstCurStep->pfExec(emDevNum);
     if (stepRet >= emStepRetMax) stepRet = emStepRetError;
 
-    // 4. 自动步骤切换
     switch (stepRet) {
         case emStepRetWait:
-            // 等待:继续当前步骤,重置超时
-            pstDev->stepStartTick = HAL_GetTick();
             break;
-        case emStepRetOk:
-        case emStepRetError: {
-            // 查找下一步ID
+        case emStepRetOk: {
             uint16_t nextStep = u16StepFindNext(pstCurStep, stepRet);
             if (nextStep == 0xFFFF) {
                 pstDev->mState = emStepMStateError;
                 break;
             }
-            // 判断是否到达结束步骤
             if (nextStep == pstDev->endStep) {
                 pstDev->mState = emStepMStateEnd;
-                // 循环执行:重置为初始步骤
                 if (pstDev->isCycle) {
-                    pstDev->curStep = pstDev->tSteps[0].stepId;
-                    pstDev->stepStartTick = HAL_GetTick();
+                    vStepSwitch(emDevNum, pstDev->tSteps[0].stepId);
                     pstDev->mState = emStepMStateRunning;
                 }
             } else {
-                // 自动切换下一步,重置超时
-                pstDev->curStep = nextStep;
-                pstDev->stepStartTick = HAL_GetTick();
+                vStepSwitch(emDevNum, nextStep);
+            }
+            break;
+        }
+        case emStepRetError: {
+            if (!u8StepHandleError(emDevNum, pstCurStep)) {
+                pstDev->mState = emStepMStateError;
             }
             break;
         }

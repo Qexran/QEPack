@@ -132,16 +132,16 @@ void vDevicePeriodExecute(){
     /* STEP */
     #if STEP_M_ENABLE
         #ifdef STEP0 
-            vStepProcess(STEP0); 
+            vStepPeriodExecute(STEP0); 
         #endif
         #ifdef STEP1 
-            vStepProcess(STEP1); 
+            vStepPeriodExecute(STEP1); 
         #endif
         #ifdef STEP2 
-            vStepProcess(STEP2); 
+            vStepPeriodExecute(STEP2); 
         #endif
         #ifdef STEP3 
-            vStepProcess(STEP3); 
+            vStepPeriodExecute(STEP3); 
         #endif
     #endif
 

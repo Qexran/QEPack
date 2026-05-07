@@ -31,9 +31,9 @@ typedef enum {
 
 /** @brief 步骤执行结果(规则)*/
 typedef enum {
-    emStepRetOk = 0,
-    emStepRetError,
-    emStepRetWait,
+    emStepRetOk = 0,   /* 正常执行，切换到下一个步骤 */
+    emStepRetError,    /* 根据规则表查找 Error 对应的下一步 */
+    emStepRetWait,     /* 不切换步骤，不重置计时器，超时后进入Error */ 
     emStepRetMax
 } emStepRetTdf;
 
@@ -74,6 +74,8 @@ typedef struct {
     emStepMStateTdf mState;  // 整体状态
     uint16_t curStep;          // 当前步骤ID
     uint32_t stepStartTick;    // 当前步骤启动时间
+    // 优化：缓存当前步骤的索引，避免每次查找
+    uint8_t curStepIndex;      // 当前步骤在数组中的索引
 } stStepDevParamTdf;
 
 // 对外接口(极简，核心：可变参数初始化接口)
@@ -84,6 +86,7 @@ void vStepStop(emSmStepDevTdf emDevNum);
 emStepMStateTdf emStepGetState(emSmStepDevTdf emDevNum);
 uint16_t u16StepGetCurStep(emSmStepDevTdf emDevNum);
 void vStepProcess(emSmStepDevTdf emDevNum); // 核心处理函数(主循环调用)
+void vStepPeriodExecute(emSmStepDevTdf emDevNum); // 周期执行函数(1ms定时器调用)
 
 #endif
 #endif
