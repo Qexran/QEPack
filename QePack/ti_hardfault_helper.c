@@ -39,10 +39,6 @@ void TIMG8_IRQHandler(void)
     __BKPT();
 }
 
-void UART3_IRQHandler(void)
-{
-    __BKPT();
-}
 
 #if !ADC_DEVICE_IS_ENABLE
     void ADC0_IRQHandler(void)
@@ -80,11 +76,6 @@ void SPI1_IRQHandler(void)
 // {
 //     __BKPT();
 // }
-
-void UART2_IRQHandler(void)
-{
-    __BKPT();
-}
 
 void TIMG0_IRQHandler(void)
 {
