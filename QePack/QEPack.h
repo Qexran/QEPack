@@ -34,6 +34,10 @@
     #include "step_machine.h"
 #endif
 
+#if COUNTER_IS_ENABLE
+    #include "counter_controller.h"
+#endif
+
 #if OLED_IS_ENABLE
     #include "OLED.h"
 #endif
