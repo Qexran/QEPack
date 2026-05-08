@@ -7,12 +7,12 @@
   * 
   */
   
-#ifndef __COUNTER_CONTROLLER_H
-#define __COUNTER_CONTROLLER_H
-
 #include "project_config.h"
 
 #if COUNTER_IS_ENABLE
+
+#ifndef _COUNTER_CONTROLLER_H_
+#define _COUNTER_CONTROLLER_H_
 
 /**
  * @brief          计数器设备号枚举
@@ -51,7 +51,7 @@ typedef struct
 } stCounterRunningParamTdf;
 
 /* 全局计数器设备数组 */
-extern stCounterRunningParamTdf g_astCounters[emCounterDevMax];
+extern stCounterRunningParamTdf g_astCounters[COUNTER_DEV_NUM];
 
 /**
  * @brief          初始化计数器

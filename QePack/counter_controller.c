@@ -4,15 +4,15 @@
   * @version    V1.0.0
   * @date       2026/5/8
   * @brief      计数器控制器实现
-  * 
+  *
   */
-  
+
 #include "counter_controller.h"
 
 #if COUNTER_IS_ENABLE
 
 /* 全局计数器设备数组 */
-stCounterRunningParamTdf g_astCounters[emCounterDevMax] = {0};
+stCounterRunningParamTdf g_astCounters[COUNTER_DEV_NUM] = {0};
 
 /**
  * @brief          初始化计数器
@@ -21,8 +21,8 @@ stCounterRunningParamTdf g_astCounters[emCounterDevMax] = {0};
  */
 void vCounterInit(emCounterDevNumTdf emDevNum, uint32_t ulTargetCount)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
     g_astCounters[emDevNum].ulCurrentCount = 0;
     g_astCounters[emDevNum].ulTargetCount = ulTargetCount;
     g_astCounters[emDevNum].emState = emCounterStateIdle;
@@ -34,8 +34,8 @@ void vCounterInit(emCounterDevNumTdf emDevNum, uint32_t ulTargetCount)
  */
 void vCounterReset(emCounterDevNumTdf emDevNum)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
     g_astCounters[emDevNum].ulCurrentCount = 0;
     g_astCounters[emDevNum].emState = emCounterStateIdle;
 }
@@ -47,12 +47,17 @@ void vCounterReset(emCounterDevNumTdf emDevNum)
  */
 void vCounterIncrement(emCounterDevNumTdf emDevNum, uint32_t ulIncrement)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
     stCounterRunningParamTdf *pstCounter = &g_astCounters[emDevNum];
-    
+
     pstCounter->ulCurrentCount += ulIncrement;
-    pstCounter->emState = emCounterStateRunning;
+
+    if (pstCounter->ulTargetCount > 0 && pstCounter->ulCurrentCount >= pstCounter->ulTargetCount) {
+        pstCounter->emState = emCounterStateReached;
+    } else {
+        pstCounter->emState = emCounterStateRunning;
+    }
 }
 
 /**
@@ -62,16 +67,16 @@ void vCounterIncrement(emCounterDevNumTdf emDevNum, uint32_t ulIncrement)
  */
 void vCounterDecrement(emCounterDevNumTdf emDevNum, uint32_t ulDecrement)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
     stCounterRunningParamTdf *pstCounter = &g_astCounters[emDevNum];
-    
+
     if (pstCounter->ulCurrentCount >= ulDecrement) {
         pstCounter->ulCurrentCount -= ulDecrement;
     } else {
         pstCounter->ulCurrentCount = 0;
     }
-    
+
     if (pstCounter->emState == emCounterStateReached && pstCounter->ulCurrentCount < pstCounter->ulTargetCount) {
         pstCounter->emState = emCounterStateRunning;
     }
@@ -84,10 +89,17 @@ void vCounterDecrement(emCounterDevNumTdf emDevNum, uint32_t ulDecrement)
  */
 void vCounterSetCount(emCounterDevNumTdf emDevNum, uint32_t ulCount)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
-    g_astCounters[emDevNum].ulCurrentCount = ulCount;
-    g_astCounters[emDevNum].emState = emCounterStateRunning;
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
+    stCounterRunningParamTdf *pstCounter = &g_astCounters[emDevNum];
+
+    pstCounter->ulCurrentCount = ulCount;
+
+    if (pstCounter->ulTargetCount > 0 && ulCount >= pstCounter->ulTargetCount) {
+        pstCounter->emState = emCounterStateReached;
+    } else {
+        pstCounter->emState = emCounterStateRunning;
+    }
 }
 
 /**
@@ -97,10 +109,17 @@ void vCounterSetCount(emCounterDevNumTdf emDevNum, uint32_t ulCount)
  */
 void vCounterSetTarget(emCounterDevNumTdf emDevNum, uint32_t ulTarget)
 {
-    if (emDevNum >= emCounterDevMax) return;
-    
-    g_astCounters[emDevNum].ulTargetCount = ulTarget;
-    g_astCounters[emDevNum].emState = emCounterStateRunning;
+    if (emDevNum >= COUNTER_DEV_NUM) return;
+
+    stCounterRunningParamTdf *pstCounter = &g_astCounters[emDevNum];
+
+    pstCounter->ulTargetCount = ulTarget;
+
+    if (ulTarget > 0 && pstCounter->ulCurrentCount >= ulTarget) {
+        pstCounter->emState = emCounterStateReached;
+    } else {
+        pstCounter->emState = emCounterStateRunning;
+    }
 }
 
 /**
@@ -110,8 +129,8 @@ void vCounterSetTarget(emCounterDevNumTdf emDevNum, uint32_t ulTarget)
  */
 uint32_t ulCounterGetCurrent(emCounterDevNumTdf emDevNum)
 {
-    if (emDevNum >= emCounterDevMax) return 0;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return 0;
+
     return g_astCounters[emDevNum].ulCurrentCount;
 }
 
@@ -122,8 +141,8 @@ uint32_t ulCounterGetCurrent(emCounterDevNumTdf emDevNum)
  */
 uint32_t ulCounterGetTarget(emCounterDevNumTdf emDevNum)
 {
-    if (emDevNum >= emCounterDevMax) return 0;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return 0;
+
     return g_astCounters[emDevNum].ulTargetCount;
 }
 
@@ -134,8 +153,8 @@ uint32_t ulCounterGetTarget(emCounterDevNumTdf emDevNum)
  */
 emCounterStateTdf emCounterGetState(emCounterDevNumTdf emDevNum)
 {
-    if (emDevNum >= emCounterDevMax) return emCounterStateIdle;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return emCounterStateIdle;
+
     return g_astCounters[emDevNum].emState;
 }
 
@@ -146,18 +165,11 @@ emCounterStateTdf emCounterGetState(emCounterDevNumTdf emDevNum)
  */
 uint8_t u8CounterIsReached(emCounterDevNumTdf emDevNum)
 {
-    if (emDevNum >= emCounterDevMax) return 0;
-    
+    if (emDevNum >= COUNTER_DEV_NUM) return 0;
+
     stCounterRunningParamTdf *pstCounter = &g_astCounters[emDevNum];
-    
-    if (pstCounter->ulCurrentCount >= pstCounter->ulTargetCount) {
-        if (pstCounter->ulTargetCount > 0) {
-            pstCounter->emState = emCounterStateReached;
-        }
-        return 1;
-    }
-    
-    return 0;
+
+    return (pstCounter->ulTargetCount > 0 && pstCounter->ulCurrentCount >= pstCounter->ulTargetCount) ? 1 : 0;
 }
 
 /**
