@@ -60,10 +60,10 @@ void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
 
     /* 启动串口接收中断 */
     #if UART_IS_USE_DMA
-        //打开DMA接收
+        //打开DMA接收（写入专用DMA缓冲区，与环形缓冲区隔离）
         HAL_UARTEx_ReceiveToIdle_DMA(
             pstInit->pstUartHandle,
-            pstRunning->stUartTempBuffer.buffer,
+            pstRunning->aucDmaRxBuf,
             UART_BUF_MAX_LEN
         );
     #else
@@ -529,17 +529,26 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
 
     if(pstRunning->stUartTempBuffer.count > 0)
     {
-        // 启用帧功能：逐字节解析帧
         if(pstStatic->emFrameEn == emUartFrameOn)
         {
+            // 帧模式：逐字节送入帧解析器 → aucFrameDataBuf
             uint8_t ucData = ucUartReceiveByte(emDevNum);
             vUartParseFrame(emDevNum, ucData);
         }
-        else
+        else if(pstStatic->vCallbackFcn)
         {
-            // 非帧模式：数据已在环形缓冲区中，通知用户读取
-            pstRunning->ucRxComplete = 1;
+            // 非帧+回调模式：批量拷贝到 aucFrameDataBuf，统一回调读取接口
+            pstRunning->ulFrameDataCount = 0;
+            while(pstRunning->stUartTempBuffer.count > 0 && pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN)
+            {
+                pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = ucUartReceiveByte(emDevNum);
+            }
+            if(pstRunning->ulFrameDataCount > 0)
+            {
+                pstRunning->ucRxComplete = 1;
+            }
         }
+        // 非帧+轮询模式：数据留在环形缓冲区，用户通过 ucUartRxAvailable + ucUartReceiveByte 读取
     }
 }
 
@@ -646,27 +655,29 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     {
         if(pstStatic->emFrameEn == emUartFrameOn)
         {
-            // 帧模式：逐字节调用统一的帧解析器
+            // 帧模式：从DMA缓冲区逐字节送入帧解析器
             for(uint16_t idx = 0; idx < Size; idx++)
             {
-                vUartParseFrame((emUartDevNumTdf)i, pstRunning->stUartTempBuffer.buffer[idx]);
+                vUartParseFrame((emUartDevNumTdf)i, pstRunning->aucDmaRxBuf[idx]);
             }
         }
         else
         {
-            // 非帧模式：设置环形缓冲区指针，数据原地可读
-            pstRunning->stUartTempBuffer.tail = 0;
-            pstRunning->stUartTempBuffer.head = Size;
-            pstRunning->stUartTempBuffer.count = Size;
+            // 非帧模式：从DMA缓冲区拷贝到 aucFrameDataBuf（统一读取接口）
+            pstRunning->ulFrameDataCount = 0;
+            for(uint16_t idx = 0; idx < Size && pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN; idx++)
+            {
+                pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = pstRunning->aucDmaRxBuf[idx];
+            }
             pstRunning->ulRxCount += Size;
             pstRunning->ucRxComplete = 1;
         }
     }
 
-    // 重新开启DMA接收
+    // 重新开启DMA接收（写入专用DMA缓冲区，不影响环形缓冲区中的数据）
     HAL_UARTEx_ReceiveToIdle_DMA(
         pstStatic->pstUartHandle,
-        pstRunning->stUartTempBuffer.buffer,
+        pstRunning->aucDmaRxBuf,
         UART_BUF_MAX_LEN
     );
 }

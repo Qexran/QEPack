@@ -87,6 +87,7 @@ typedef struct
     uint16_t usTxQueueCount;                     							// 队列中待发送的数据长度（避免频繁计算头尾差）
     uint8_t  ucTxBusy;                           							// 发送忙标记（0：空闲，1：忙，避免重复启动DMA）
 	uint16_t usTxCurrentDmaLen;      										// 当前DMA发送的长度
+	uint8_t  aucDmaRxBuf[UART_BUF_MAX_LEN];    							// DMA接收专用缓冲区（与DMA硬件绑定，避免覆盖环形缓冲区数据）
 #endif
 } stUartRunningParamTdf;
 
