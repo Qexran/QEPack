@@ -143,8 +143,6 @@ void vUartSendFloat(emUartDevNumTdf emDevNum, float fNum, uint8_t ucDecBit);
 /* 帧收发接口 */
 void vUartSendFrame(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen);
 
-void vUartRegisterCallback(vUartFrameCallback vCallbackFcn);
-
 uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum);
 
 /* 周期执行 */
