@@ -36,70 +36,53 @@ void vUartDeviceRunningParamInit(stUartRunningParamTdf *pstInit, emUartDevNumTdf
 /// @param      emDevNum   ：设备号
 void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
 {
-	stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
-	stUartStaticParamTdf  *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
-	
-	if(pstInit->emFrameEn == emUartFrameOff){
-        pstInit->pucFrameHead   = NULL;
-        pstInit->pucFrameTail   = NULL;
-        pstInit->ucFrameHeadLen = 0;
-        pstInit->ucFrameTailLen = 0;
-    }
-    
+    stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
+    stUartStaticParamTdf  *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
+
     memcpy(pstStatic, pstInit, sizeof(stUartStaticParamTdf));
-    
+
+    if(pstStatic->emFrameEn == emUartFrameOff){
+        pstStatic->pucFrameHead   = NULL;
+        pstStatic->pucFrameTail   = NULL;
+        pstStatic->ucFrameHeadLen = 0;
+        pstStatic->ucFrameTailLen = 0;
+    }
+
     // 默认初始化运行参数
     memset(pstRunning, 0, sizeof(stUartRunningParamTdf));
     pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
 
-	
-	/* 初始化缓冲区 */
-	memset(&pstRunning->stUartTempBuffer, 0, sizeof(pstRunning->stUartTempBuffer));
 
-    
-	
-	/* 启动串口接收中断 */
-	#if UART_IS_USE_DMA
-		//打开DMA接收
-		/*
-			对于 HAL_UART_Receive_DMA()
-				1.开启 IDLE 中断：
-					IDLE 触发时进入USART1_IRQHandler()
-					需手动清 IDLE 标志位 + 手动处理数据；
-					收满字节时进入 HAL_UART_RxCpltCallback()。
-				2.不开启 IDLE 中断：
-					仅收满字节时进入 HAL_UART_RxCpltCallback()。
-			对于 HAL_UARTEx_ReceiveToIdle_DMA()
-				IDLE 触发或收满字节时，均自动进入 HAL_UARTEx_RxEventCallback()；
-				无需手动清 IDLE 标志位、无需手动停止 DMA，HAL 库内部自动完成。
-		*/
-		HAL_UARTEx_ReceiveToIdle_DMA(
-			pstInit->pstUartHandle,
-			pstRunning->stUartTempBuffer.buffer, 
-			UART_BUF_MAX_LEN
-		);
-		//使能IDLE中断（仅在使用HAL_UART_Receive_DMA接收才需要）
-//		__HAL_UART_ENABLE_IT(
-//			pstInit->pstUartHandle,
-//			UART_IT_IDLE
-//		);
-	#else
+    /* 初始化缓冲区 */
+    memset(&pstRunning->stUartTempBuffer, 0, sizeof(pstRunning->stUartTempBuffer));
+
+
+
+    /* 启动串口接收中断 */
+    #if UART_IS_USE_DMA
+        //打开DMA接收
+        HAL_UARTEx_ReceiveToIdle_DMA(
+            pstInit->pstUartHandle,
+            pstRunning->stUartTempBuffer.buffer,
+            UART_BUF_MAX_LEN
+        );
+    #else
         #if (QEPACK_PLATFORM == TI)
             NVIC_ClearPendingIRQ(pstStatic->pstUartHandle->int_irqn); // 清除 UART 中断挂起标志
             NVIC_EnableIRQ(pstStatic->pstUartHandle->int_irqn);       // 使能 UART 中断
         #else
             HAL_UART_Receive_IT(
-                pstInit->pstUartHandle, 
+                pstInit->pstUartHandle,
                 &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head],
                 1
             );
         #endif
-	#endif
-    
-	// 注册回调函数
-	if(pstInit->vCallbackFcn){
-		astUartDeviceParam[emDevNum].stStaticParam.vCallbackFcn = pstInit->vCallbackFcn;
-	}
+    #endif
+
+    // 注册回调函数
+    if(pstInit->vCallbackFcn){
+        astUartDeviceParam[emDevNum].stStaticParam.vCallbackFcn = pstInit->vCallbackFcn;
+    }
 }
 
 #if UART_IS_USE_DMA
@@ -115,20 +98,21 @@ static uint8_t ucUartTxQueuePush(emUartDevNumTdf emDevNum, uint8_t *pucData, uin
     {
         return 1;
     }
-	
-	uint32_t primask;
+
+    uint32_t primask;
     primask = __get_PRIMASK();  // 保存当前中断状态
     __disable_irq();            // 禁用中断
-    
+
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
     uint32_t ulFreeSpace = UART_TX_QUEUE_MAX_LEN - pstRunning->usTxQueueCount;
-    
+
     // 2. 检查队列是否有足够空闲空间
     if(ulLen > ulFreeSpace)
     {
+        __set_PRIMASK(primask);     // 恢复中断状态
         return 1;  // 队列满，入队失败
     }
-    
+
     // 3. 环形缓冲区：逐字节存入数据（避免越界）
     for(uint32_t i = 0; i < ulLen; i++)
     {
@@ -137,8 +121,8 @@ static uint8_t ucUartTxQueuePush(emUartDevNumTdf emDevNum, uint8_t *pucData, uin
         pstRunning->usTxQueueTail = (pstRunning->usTxQueueTail + 1) % UART_TX_QUEUE_MAX_LEN;
         pstRunning->usTxQueueCount++;  // 待发送数据计数递增
     }
-    
-	__set_PRIMASK(primask);     // 恢复中断状态
+
+    __set_PRIMASK(primask);     // 恢复中断状态
     return 0;  // 入队成功
 }
 
@@ -149,26 +133,26 @@ static void vUartStartNextTxDMA(emUartDevNumTdf emDevNum)
     stUartDeviceParamTdf *pstDev = &astUartDeviceParam[emDevNum];
     stUartRunningParamTdf *pstRunning = &pstDev->stRunningParam;
     stUartStaticParamTdf *pstStatic = &pstDev->stStaticParam;
-    
+
     // 1. 保护判断：发送忙 或 队列为空，直接返回
     if(pstRunning->ucTxBusy == 1 || pstRunning->usTxQueueCount == 0)
     {
         return;
     }
-    
+
     // 2. 计算本次要发送的长度（不能超过最大限制）
     uint16_t usSendLen = pstRunning->usTxQueueCount;
     if(usSendLen > UART_TX_QUEUE_MAX_LEN - pstRunning->usTxQueueHead)
     {
         usSendLen = UART_TX_QUEUE_MAX_LEN - pstRunning->usTxQueueHead;
     }
-    
+
     // 3. 记录本次发送的长度
     pstRunning->usTxCurrentDmaLen = usSendLen;
-    
+
     // 4. 标记发送忙
     pstRunning->ucTxBusy = 1;
-    
+
     // 5. 启动DMA发送
     HAL_UART_Transmit_DMA(
         pstStatic->pstUartHandle,
@@ -180,7 +164,7 @@ static void vUartStartNextTxDMA(emUartDevNumTdf emDevNum)
 #endif
 
 
-/// @brief      发送字节数组（修复后：入队缓存，异步发送）
+/// @brief      发送字节数组
 /// @param      emDevNum   ：设备号
 /// @param      pucData    ：待发送数组指针
 /// @param      ulLen      ：待发送长度
@@ -190,17 +174,16 @@ void vUartSendArray(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
     {
         return;
     }
-    
+
     stUartDeviceParamTdf *pstDev = &astUartDeviceParam[emDevNum];
-    
+
     #if UART_IS_USE_DMA
         if(ucUartTxQueuePush(emDevNum, pucData, ulLen) == 0)
         {
             // 入队成功，更新发送计数
             pstDev->stRunningParam.ulTxCount += ulLen;
-            
+
             // 检查当前是否空闲，如果是则立即启动发送
-            // 如果不是，等待当前发送完成后的回调中自动续发
             if(pstDev->stRunningParam.ucTxBusy == 0)
             {
                 vUartStartNextTxDMA(emDevNum);
@@ -209,21 +192,20 @@ void vUartSendArray(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
     #else
         #if (QEPACK_PLATFORM == TI)
             TI_UART_Transmit(
-                pstDev->stStaticParam.pstUartHandle, 
-                pucData, 
-                ulLen, 
+                pstDev->stStaticParam.pstUartHandle,
+                pucData,
+                ulLen,
                 TI_MAX_DELAY
             );
         #else
-            // 非DMA模式，保留原有逻辑不变
             HAL_UART_Transmit(
-                pstDev->stStaticParam.pstUartHandle, 
-                pucData, 
-                ulLen, 
+                pstDev->stStaticParam.pstUartHandle,
+                pucData,
+                ulLen,
                 HAL_MAX_DELAY
             );
-        #endif 
-        
+        #endif
+
         pstDev->stRunningParam.ulTxCount += ulLen;
     #endif
 }
@@ -234,7 +216,7 @@ void vUartSendArray(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
 /// @param      ucData     ：待发送字节
 void vUartSendByte(emUartDevNumTdf emDevNum, uint8_t ucData)
 {
-	vUartSendArray(emDevNum, &ucData, 1);
+    vUartSendArray(emDevNum, &ucData, 1);
 }
 
 /// @brief      接收单个字节
@@ -242,12 +224,12 @@ void vUartSendByte(emUartDevNumTdf emDevNum, uint8_t ucData)
 /// @return     接收到的字节
 uint8_t ucUartReceiveByte(emUartDevNumTdf emDevNum)
 {
-	stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
+    stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 
     uint8_t data = 0;
     if (pstRunning->stUartTempBuffer.count > 0) {
         data = pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.tail];
-        pstRunning->stUartTempBuffer.tail = (pstRunning->stUartTempBuffer.tail + 1) % 256;
+        pstRunning->stUartTempBuffer.tail = (pstRunning->stUartTempBuffer.tail + 1) % UART_BUF_MAX_LEN;
         pstRunning->stUartTempBuffer.count--;
     }
     return data;
@@ -263,19 +245,19 @@ uint8_t ucUartReceiveByte(emUartDevNumTdf emDevNum)
 uint32_t ulUartReceiveArray(emUartDevNumTdf emDevNum, uint8_t *pucBuf, uint32_t ulMaxLen)
 {
     uint32_t ulRecvLen = 0;
-    
+
     if((pucBuf == NULL) || (ulMaxLen == 0))
     {
         return 0;
     }
-    
-    ulRecvLen = HAL_UART_Receive(astUartDeviceParam[emDevNum].stStaticParam.pstUartHandle, 
-                                 pucBuf, 
-                                 ulMaxLen, 
+
+    ulRecvLen = HAL_UART_Receive(astUartDeviceParam[emDevNum].stStaticParam.pstUartHandle,
+                                 pucBuf,
+                                 ulMaxLen,
                                  HAL_MAX_DELAY);
     astUartDeviceParam[emDevNum].stRunningParam.ulRxCount += ulRecvLen;
     astUartDeviceParam[emDevNum].stRunningParam.ucRxComplete = 1;
-    
+
     return ulRecvLen;
 }
 #endif
@@ -289,23 +271,23 @@ void vUartPrintf(emUartDevNumTdf emDevNum, const char *pcFormat, ...)
     va_list stVaList;
     uint32_t ulLen = 0;
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
-    
+
     if(pcFormat == NULL)
     {
         return;
     }
-    
+
     // 格式化字符串到发送缓存（预留1字节给终止符，避免溢出）
     va_start(stVaList, pcFormat);
     ulLen = vsnprintf(
-        (char*)pstRunning->aucTxBuf, 
-        UART_TX_BUF_MAX_LEN - 1,  // 优化：预留1字节，避免缓冲区溢出
-        pcFormat, 
+        (char*)pstRunning->aucTxBuf,
+        UART_TX_BUF_MAX_LEN - 1,
+        pcFormat,
         stVaList
     );
     va_end(stVaList);
-    
-    // 发送格式化后的数据（复用vUartSendArray，间接入队）
+
+    // 发送格式化后的数据
     if(ulLen > 0 && ulLen < UART_TX_BUF_MAX_LEN)
     {
         vUartSendArray(emDevNum, pstRunning->aucTxBuf, ulLen);
@@ -322,25 +304,22 @@ void vUartSendInt(emUartDevNumTdf emDevNum, int32_t lNum, uint8_t ucBase)
     uint32_t ulAbsNum;
     int8_t i;
     uint8_t ucStartFlag = 0; // 跳过前置0标志位
-    
+
     switch(ucBase)
     {
         case 10:
-            // 10进制：直接用sprintf格式化
             sprintf(cBuf, "%d", lNum);
             break;
-            
+
         case 16:
-            // 16进制：格式化输出大写（和itoa默认风格一致）
             sprintf(cBuf, "%X", (uint32_t)lNum);
             break;
-            
+
         case 2:
-            // 二进制：sprintf无原生支持，手动转换
             if(lNum < 0)
             {
                 ulAbsNum = (uint32_t)(-lNum);
-                cBuf[0] = '-'; // 负数添加负号
+                cBuf[0] = '-';
                 i = 1;
             }
             else
@@ -348,8 +327,7 @@ void vUartSendInt(emUartDevNumTdf emDevNum, int32_t lNum, uint8_t ucBase)
                 ulAbsNum = (uint32_t)lNum;
                 i = 0;
             }
-            
-            // 从最高位到最低位逐位转换
+
             for(int8_t bit = 31; bit >= 0; bit--)
             {
                 uint32_t ulMask = 1UL << bit;
@@ -365,14 +343,12 @@ void vUartSendInt(emUartDevNumTdf emDevNum, int32_t lNum, uint8_t ucBase)
                 }
             }
             break;
-            
+
         default:
-            // 非法进制，默认按10进制处理
             sprintf(cBuf, "%d", lNum);
             break;
     }
-    
-    // 发送转换后的字符串
+
     vUartPrintf(emDevNum, "%s", cBuf);
 }
 
@@ -383,7 +359,7 @@ void vUartSendInt(emUartDevNumTdf emDevNum, int32_t lNum, uint8_t ucBase)
 void vUartSendFloat(emUartDevNumTdf emDevNum, float fNum, uint8_t ucDecBit)
 {
     char cFormat[16] = {0};
-    sprintf(cFormat, "%%.%df", ucDecBit); // 构造格式化符(如%.2f)
+    sprintf(cFormat, "%%.%df", ucDecBit);
     vUartPrintf(emDevNum, cFormat, fNum);
 }
 
@@ -395,21 +371,21 @@ void vUartSendFloat(emUartDevNumTdf emDevNum, float fNum, uint8_t ucDecBit)
 void vUartSendFrame(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
 {
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
-    
+
     if(pstStatic->emFrameEn == emUartFrameOff || pucData == NULL || ulLen == 0)
     {
         return;
     }
-    
+
     // 1. 发送帧头
     if(pstStatic->pucFrameHead != NULL && pstStatic->ucFrameHeadLen > 0)
     {
         vUartSendArray(emDevNum, pstStatic->pucFrameHead, pstStatic->ucFrameHeadLen);
     }
-    
+
     // 2. 发送数据
     vUartSendArray(emDevNum, pucData, ulLen);
-    
+
     // 3. 发送帧尾
     if(pstStatic->pucFrameTail != NULL && pstStatic->ucFrameTailLen > 0)
     {
@@ -417,149 +393,7 @@ void vUartSendFrame(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
     }
 }
 
-#if UART_IS_USE_DMA
-/// @brief      DMA模式专用：批量解析接收帧（处理批量数据，适配DMA）
-/// @param      emDevNum   ：设备号
-/// @param      pucBatchBuf：DMA批量数据缓冲区指针
-/// @param      usSize     ：DMA接收的有效数据长度
-static void vUartParseFrame_DMA(emUartDevNumTdf emDevNum, uint8_t *pucBatchBuf, uint16_t usSize)
-{
-    if(pucBatchBuf == NULL || usSize == 0)
-    {
-        return;
-    }
-    
-    stUartDeviceParamTdf *pstDev = &astUartDeviceParam[emDevNum];
-    stUartStaticParamTdf *pstStatic = &pstDev->stStaticParam;
-    stUartRunningParamTdf *pstRunning = &pstDev->stRunningParam;
-    
-    // 1. 检查帧功能是否使能，帧头/帧尾是否有效
-    if(pstStatic->emFrameEn == emUartFrameOff || pstStatic->pucFrameHead == NULL || pstStatic->ucFrameHeadLen == 0)
-    {
-        return;
-    }
-    
-    // 2. 批量遍历DMA接收的有效数据
-    for(uint16_t idx = 0; idx < usSize; idx++)
-    {
-        uint8_t ucData = pucBatchBuf[idx]; // 当前遍历的字节
-        
-        switch(pstRunning->emFrameParseState)
-        {
-            case emUartFrameParseState_WaitHead:
-            {
-                // 逐字节匹配帧头（维持跨批次的匹配状态）
-                if(ucData == pstStatic->pucFrameHead[pstRunning->s_ucHeadMatchCount])
-                {
-                    pstRunning->s_ucHeadMatchCount++;
-                    // 帧头匹配完成，切换到接收数据状态
-                    if(pstRunning->s_ucHeadMatchCount >= pstStatic->ucFrameHeadLen)
-                    {
-                        pstRunning->s_ucHeadMatchCount = 0;
-                        pstRunning->emFrameParseState = emUartFrameParseState_RecvData;
-                        pstRunning->ulFrameDataCount = 0; // 重置帧数据计数
-                    }
-                }
-                else
-                {
-                    // 匹配失败，重置帧头匹配计数（支持跨批次重新匹配）
-                    pstRunning->s_ucHeadMatchCount = 0;
-                    // 优化：支持帧头重叠匹配（比如帧头0xAA0xBB，避免遗漏跨字节帧头）
-                    if(ucData == pstStatic->pucFrameHead[0])
-                    {
-                        pstRunning->s_ucHeadMatchCount = 1;
-                    }
-                }
-                break;
-            }
-            
-            case emUartFrameParseState_RecvData:
-            {
-                // 先判断缓冲区是否溢出（避免越界）
-                if(pstRunning->ulFrameDataCount >= UART_FRAME_MAX_LEN)
-                {
-                    // 缓冲区溢出，重置解析状态，避免数据覆盖
-                    pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                    pstRunning->s_ucHeadMatchCount = 0;
-                    pstRunning->s_ucTailMatchCount = 0;
-                    pstRunning->ulFrameDataCount = 0;
-                    memset(pstRunning->aucFrameDataBuf, 0, UART_FRAME_MAX_LEN);
-                    break;
-                }
-                
-                // 匹配帧尾（维持跨批次的匹配状态）
-                if(ucData == pstStatic->pucFrameTail[pstRunning->s_ucTailMatchCount])
-                {
-                    pstRunning->s_ucTailMatchCount++;
-                    // 帧尾匹配完成，解析结束
-                    if(pstRunning->s_ucTailMatchCount >= pstStatic->ucFrameTailLen)
-                    {
-                        pstRunning->s_ucTailMatchCount = 0;
-                        pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                        pstRunning->ucRxComplete = 1; // 标记帧接收完成
-                        break;
-                    }
-                }
-                else
-                {
-                    // 帧尾匹配失败，处理已匹配的帧尾字节（写入缓冲区）
-                    if(pstRunning->s_ucTailMatchCount > 0)
-                    {
-                        for(uint8_t i=0; i<pstRunning->s_ucTailMatchCount; i++)
-                        {
-                            if(pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN)
-                            {
-                                pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = pstStatic->pucFrameTail[i];
-                            }
-                            else
-                            {
-                                // 溢出保护：直接重置解析状态
-                                pstRunning->s_ucTailMatchCount = 0;
-                                pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                                break;
-                            }
-                        }
-                        pstRunning->s_ucTailMatchCount = 0;
-                    }
-                    
-                    // 存储当前数据字节（核心：确保写入aucFrameDataBuf）
-                    if(pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN)
-                    {
-                        pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = ucData;
-                    }
-                    else
-                    {
-                        // 溢出保护：重置解析状态
-                        pstRunning->s_ucTailMatchCount = 0;
-                        pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                        break;
-                    }
-                    
-                    // 优化：支持数据中嵌套帧头的重新匹配，解决DMA批量数据的帧头重叠问题
-                    if(ucData == pstStatic->pucFrameHead[0])
-                    {
-                        pstRunning->s_ucHeadMatchCount = 1;
-                    }
-                }
-                break;
-            }
-            
-            default:
-            {
-                // 异常状态，重置所有解析参数
-                pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                pstRunning->s_ucHeadMatchCount = 0;
-                pstRunning->s_ucTailMatchCount = 0;
-                pstRunning->ulFrameDataCount = 0;
-                break;
-            }
-        }
-    }
-}
-
-#endif
-
-/// @brief      解析接收帧（内部调用）
+/// @brief      解析接收帧（统一版本，DMA / 非DMA 共用）
 /// @param      emDevNum   ：设备号
 /// @param      ucData     ：当前接收字节
 static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
@@ -567,12 +401,13 @@ static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
     stUartDeviceParamTdf *pstDev = &astUartDeviceParam[emDevNum];
     stUartStaticParamTdf *pstStatic = &pstDev->stStaticParam;
     stUartRunningParamTdf *pstRunning = &pstDev->stRunningParam;
-    
+
+    pstRunning->ulRxCount++; // 统计接收字节总数
+
     switch(pstRunning->emFrameParseState)
     {
         case emUartFrameParseState_WaitHead:
         {
-            // 匹配帧头（逐字节比对）
             if(ucData == pstStatic->pucFrameHead[pstRunning->s_ucHeadMatchCount])
             {
                 pstRunning->s_ucHeadMatchCount++;
@@ -580,19 +415,34 @@ static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
                 {
                     pstRunning->s_ucHeadMatchCount = 0;
                     pstRunning->emFrameParseState = emUartFrameParseState_RecvData;
-                    pstRunning->ulFrameDataCount = 0; // 重置帧数据计数
+                    pstRunning->ulFrameDataCount = 0;
                 }
             }
             else
             {
-                pstRunning->s_ucHeadMatchCount = 0; // 匹配失败，重置计数
+                pstRunning->s_ucHeadMatchCount = 0;
+                // 支持帧头重叠匹配（如帧头0xAA 0xAA，避免遗漏跨字节帧头）
+                if(ucData == pstStatic->pucFrameHead[0])
+                {
+                    pstRunning->s_ucHeadMatchCount = 1;
+                }
             }
             break;
         }
-        
+
         case emUartFrameParseState_RecvData:
         {
-            // 接收帧数据，直到匹配帧尾
+            // 缓冲区溢出保护：重置解析状态
+            if(pstRunning->ulFrameDataCount >= UART_FRAME_MAX_LEN)
+            {
+                pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
+                pstRunning->s_ucHeadMatchCount = 0;
+                pstRunning->s_ucTailMatchCount = 0;
+                pstRunning->ulFrameDataCount = 0;
+                memset(pstRunning->aucFrameDataBuf, 0, UART_FRAME_MAX_LEN);
+                break;
+            }
+
             if(ucData == pstStatic->pucFrameTail[pstRunning->s_ucTailMatchCount])
             {
                 pstRunning->s_ucTailMatchCount++;
@@ -600,16 +450,13 @@ static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
                 {
                     pstRunning->s_ucTailMatchCount = 0;
                     pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-                    pstRunning->ucRxComplete = 1; // 帧接收完成
+                    pstRunning->ucRxComplete = 1;
                     break;
                 }
             }
             else
             {
-				/*
-					这里需要补充一下，当接收的过程中如果意外捕获到帧头，那么就重新开始接收第一个字节
-				*/
-                // 帧尾匹配失败，将当前字节计入数据，重置帧尾匹配计数
+                // 帧尾匹配失败，将已匹配的帧尾字节写入数据缓冲区
                 if(pstRunning->s_ucTailMatchCount > 0)
                 {
                     for(uint8_t i=0; i<pstRunning->s_ucTailMatchCount; i++)
@@ -621,78 +468,77 @@ static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
                     }
                     pstRunning->s_ucTailMatchCount = 0;
                 }
-                
-                // 存储数据字节
+
+                // 存储当前数据字节
                 if(pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN)
                 {
                     pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = ucData;
                 }
+
+                // 支持数据中嵌套帧头的重新匹配
+                if(ucData == pstStatic->pucFrameHead[0])
+                {
+                    pstRunning->s_ucHeadMatchCount = 1;
+                }
             }
             break;
         }
-        
+
         default:
         {
             pstRunning->emFrameParseState = emUartFrameParseState_WaitHead;
-			pstRunning->s_ucHeadMatchCount = 0;
             pstRunning->s_ucHeadMatchCount = 0;
+            pstRunning->s_ucTailMatchCount = 0;
+            pstRunning->ulFrameDataCount = 0;
             break;
         }
     }
 }
 
-/// @brief      接收带帧头帧尾的数据帧
+/// @brief      接收帧处理（内部调用，由 vUartDevicePeriodExecute 触发）
 /// @param      emDevNum   ：设备号
-/// @param      pucFrameData ：帧数据缓存指针
-/// @return     帧数据长度
-void vUartReceiveFrame(emUartDevNumTdf emDevNum)
+static void vUartReceiveFrame(emUartDevNumTdf emDevNum)
 {
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
-	stUartStaticParamTdf *pstStatic  = &astUartDeviceParam[emDevNum].stStaticParam;
-    
+    stUartStaticParamTdf *pstStatic  = &astUartDeviceParam[emDevNum].stStaticParam;
+
     if(pstRunning->ucRxComplete == 1)
     {
-		// 调用回调函数
-		if (pstStatic->vCallbackFcn) {
-			pstStatic->vCallbackFcn(emDevNum, pstRunning);
-		}
-        
+        // 调用回调函数
+        if (pstStatic->vCallbackFcn) {
+            pstStatic->vCallbackFcn(emDevNum, pstRunning);
+        }
+
         // 重置接收状态
         pstRunning->ucRxComplete = 0;
         pstRunning->ulFrameDataCount = 0;
-        pstRunning->ulRxCount = 0;
-        pstRunning->ulTxCount = 0;
         memset(pstRunning->aucFrameDataBuf, 0, UART_FRAME_MAX_LEN);
     }
-    
+
 }
 
 /// @brief      UART周期执行（处理接收解析）
 /// @param      emDevNum   ：设备号
-/// @note       建议1ms调用一次，或放在UART接收中断中
+/// @note       建议1ms调用一次，放在1ms定时器ISR中
 void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
 {
-	vUartReceiveFrame(emDevNum);
-	
+    vUartReceiveFrame(emDevNum);
+
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
-    
-    // 检查是否有接收数据（RXNE：接收寄存器非空）
+
     if(pstRunning->stUartTempBuffer.count > 0)
     {
-        uint8_t ucData = ucUartReceiveByte(emDevNum);
-        
-        // 启用帧功能时解析帧，否则直接存入接收缓存
+        // 启用帧功能：逐字节解析帧
         if(pstStatic->emFrameEn == emUartFrameOn)
         {
+            uint8_t ucData = ucUartReceiveByte(emDevNum);
             vUartParseFrame(emDevNum, ucData);
         }
         else
         {
-            pstRunning->aucRxBuf[0] = ucData; // 存入当前索引
-            //pstRunning->ulRxCount++; // 计数后增 [此时不应计算个数，立即进入中断]
-            pstRunning->ucRxComplete = 1; // 标记有数据接收
-
+            // 非帧模式：数据已在环形缓冲区中，通知用户读取
+            pstRunning->ucRxComplete = 1;
         }
     }
 }
@@ -706,23 +552,29 @@ uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum)
     return pstDev->stRunningParam.stUartTempBuffer.count > 0;
 }
 
+/// @brief 更新环形接收缓冲区（由 UART 接收中断调用）
+/// @param emDevNum ：设备号
 void vUartUpdateBuffer(emUartDevNumTdf emDevNum){
-	stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
-	stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
+    stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
+    stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
 
+    if (pstRunning->stUartTempBuffer.count < UART_BUF_MAX_LEN) {
     #if (QEPACK_PLATFORM == TI)
-       pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head] = 
-       DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
+        pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head] =
+        DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
     #endif
-	
-	// 更新环形缓冲区指针
-	if (pstRunning->stUartTempBuffer.count < UART_BUF_MAX_LEN) {
-		pstRunning->stUartTempBuffer.head = (pstRunning->stUartTempBuffer.head + 1) % UART_BUF_MAX_LEN;
-		pstRunning->stUartTempBuffer.count++;
-	}
+        pstRunning->stUartTempBuffer.head = (pstRunning->stUartTempBuffer.head + 1) % UART_BUF_MAX_LEN;
+        pstRunning->stUartTempBuffer.count++;
+        pstRunning->ulRxCount++; // 统计接收字节总数
+    }
+    #if (QEPACK_PLATFORM == TI)
+    else {
+        // 缓冲区满，仍需读取数据寄存器以清除中断标志
+        DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
+    }
+    #endif
 
     #if (QEPACK_PLATFORM == ST)
-        // 继续接收下一个字节
         HAL_UART_Receive_IT(pstStatic->pstUartHandle, &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head], 1);
     #endif
 }
@@ -730,16 +582,14 @@ void vUartUpdateBuffer(emUartDevNumTdf emDevNum){
 #if (QEPACK_PLATFORM == TI)
     void vUartRxCallBackHandler(emUartDevNumTdf emDevNum){
         vUartUpdateBuffer(emDevNum);
-        
+
     }
 #else
     emUartDevNumTdf vUartRxCallBackHandler(UART_HandleTypeDef *huart){
-        /* 查阅可用的UART句柄并更新 */
         uint8_t i = emUartDevNum0;
         for(;i < UART_DEV_NUM; i++){
             if(huart == astUartDeviceParam[i].stStaticParam.pstUartHandle){
                 vUartUpdateBuffer((emUartDevNumTdf)i);
-                /* 优化: 匹配到后立即返回 */
                 break;
             }
         }
@@ -756,22 +606,14 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         if(huart == astUartDeviceParam[i].stStaticParam.pstUartHandle)
         {
             stUartRunningParamTdf *pstRunning = &astUartDeviceParam[i].stRunningParam;
-            
-            // 1. 更新队列头，移除已发送的数据
+
             pstRunning->usTxQueueHead = (pstRunning->usTxQueueHead + pstRunning->usTxCurrentDmaLen) % UART_TX_QUEUE_MAX_LEN;
-            
-            // 2. 更新队列计数，减去已发送的数据长度
             pstRunning->usTxQueueCount -= pstRunning->usTxCurrentDmaLen;
-            
-            // 3. 重置当前DMA发送长度
             pstRunning->usTxCurrentDmaLen = 0;
-            
-            // 4. 重置发送忙标记
             pstRunning->ucTxBusy = 0;
-            
-            // 5. 异步启动下一批DMA发送（若队列中有新数据，自动续发）
+
             vUartStartNextTxDMA((emUartDevNumTdf)i);
-            
+
             break;
         }
     }
@@ -779,13 +621,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    // Size参数：返回本次实际接收的字节数（核心有效数据长度）
     uint8_t i = emUartDevNum0;
     stUartDeviceParamTdf *pstDev = NULL;
     stUartRunningParamTdf *pstRunning = NULL;
     stUartStaticParamTdf *pstStatic = NULL;
 
-    // 匹配对应的UART设备
     for(; i < UART_DEV_NUM; i++)
     {
         pstDev = &astUartDeviceParam[i];
@@ -797,46 +637,33 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         }
     }
 
-    // 未匹配到有效设备，直接返回
     if(i >= UART_DEV_NUM || pstRunning == NULL || pstStatic == NULL)
     {
         return;
     }
 
-    // 处理本次DMA接收的Size个有效数据
     if(Size > 0 && Size <= UART_BUF_MAX_LEN)
     {
-
-        // 分两种场景处理有效数据：
-        // 场景1：启用帧功能，直接批量解析帧数据
         if(pstStatic->emFrameEn == emUartFrameOn)
         {
-           vUartParseFrame_DMA((emUartDevNumTdf)i, pstRunning->stUartTempBuffer.buffer, Size);
-        }
-        // 场景2：未启用帧功能，存入接收缓存
-        else
-        {  
+            // 帧模式：逐字节调用统一的帧解析器
             for(uint16_t idx = 0; idx < Size; idx++)
             {
-                if(pstRunning->ulRxCount < UART_BUF_MAX_LEN)
-                {
-                    pstRunning->aucRxBuf[pstRunning->ulRxCount++] = pstRunning->stUartTempBuffer.buffer[idx];
-                    //  pstRunning->aucRxBuf[0] = pstRunning->stUartTempBuffer.buffer[0];
-                }
-                else
-                {
-                    // 缓存满，丢弃后续数据
-                    break;
-                }
-                
-                pstRunning->ucRxComplete = 1; // 帧接收完成
+                vUartParseFrame((emUartDevNumTdf)i, pstRunning->stUartTempBuffer.buffer[idx]);
             }
+        }
+        else
+        {
+            // 非帧模式：设置环形缓冲区指针，数据原地可读
+            pstRunning->stUartTempBuffer.tail = 0;
+            pstRunning->stUartTempBuffer.head = Size;
+            pstRunning->stUartTempBuffer.count = Size;
+            pstRunning->ulRxCount += Size;
+            pstRunning->ucRxComplete = 1;
         }
     }
 
-    // 核心步骤2：重新开启DMA接收，等待下一帧数据（必须保留，保证连续接收）
-    // 注意：重新开启前，可选择清空临时缓冲区（按需处理，此处直接覆盖不影响，因为有效数据已搬运）
-    memset(pstRunning->stUartTempBuffer.buffer, 0, UART_BUF_MAX_LEN); // 可选：清空临时缓冲区
+    // 重新开启DMA接收
     HAL_UARTEx_ReceiveToIdle_DMA(
         pstStatic->pstUartHandle,
         pstRunning->stUartTempBuffer.buffer,

@@ -12,7 +12,7 @@
 #ifndef _UART_DEVICE_H_
 #define _UART_DEVICE_H_
 
-#if (QEPACK_PLATFORM == ST) 
+#if (QEPACK_PLATFORM == ST)
     #include "usart.h"
 #else
     #include "ti_platform.h"
@@ -39,7 +39,7 @@ typedef enum
 typedef struct {
 	__attribute__((aligned(4)))
     uint8_t buffer[UART_BUF_MAX_LEN];
-    volatile uint16_t head; 
+    volatile uint16_t head;
     volatile uint16_t tail;
     volatile uint16_t count;
 } RingBuffer;
@@ -57,37 +57,37 @@ typedef enum
 {
     emUartFrameParseState_WaitHead    = 0,  // 等待帧头
     emUartFrameParseState_RecvData    = 1,  // 接收帧数据
-    emUartFrameParseState_WaitTail    = 2,  // 等待帧尾
 } emUartFrameParseStateTdf;
 
 /// @brief          UART运行参数定义
 /// @note           运行时动态变化的参数
 typedef struct
 {
-    RingBuffer 						stUartTempBuffer;						// 临时缓冲区
-    
-    uint8_t               			aucRxBuf[UART_BUF_MAX_LEN];    			// 接收缓存
-    uint8_t               			aucTxBuf[UART_TX_BUF_MAX_LEN];    		// 发送缓存
-    
+    RingBuffer 						stUartTempBuffer;						// 接收环形缓冲区
+
+    uint8_t               			aucTxBuf[UART_TX_BUF_MAX_LEN];    		// 发送缓存（vUartPrintf格式化用）
+
     uint32_t              			ulRxCount;                     			// 接收字节计数
     uint32_t              			ulTxCount;                     			// 发送字节计数
-    
+
     uint8_t               			ucRxComplete;                  			// 接收完成标志
-    
+
     emUartFrameParseStateTdf 		emFrameParseState;          			// 帧解析状态
     uint8_t               			aucFrameDataBuf[UART_FRAME_MAX_LEN];  	// 帧数据缓存
     uint32_t              			ulFrameDataCount;              			// 帧数据计数
 
 	uint8_t 						s_ucHeadMatchCount;						// 帧头匹配计数器
 	uint8_t 						s_ucTailMatchCount;						// 帧尾匹配计数器
-	
-	__attribute__((aligned(4))) 
+
+#if UART_IS_USE_DMA
+	__attribute__((aligned(4)))
 	uint8_t  aucTxQueue[UART_TX_QUEUE_MAX_LEN];  							// 环形发送队列缓冲区（缓存待发送数据）
     uint16_t usTxQueueHead;                      							// 队列头（取数据的索引，发送完成后更新）
     uint16_t usTxQueueTail;                      							// 队列尾（存数据的索引，入队时更新）
     uint16_t usTxQueueCount;                     							// 队列中待发送的数据长度（避免频繁计算头尾差）
     uint8_t  ucTxBusy;                           							// 发送忙标记（0：空闲，1：忙，避免重复启动DMA）
 	uint16_t usTxCurrentDmaLen;      										// 当前DMA发送的长度
+#endif
 } stUartRunningParamTdf;
 
 /// @brief          串口接收帧回调函数实现
@@ -102,7 +102,7 @@ typedef struct
     #else
         UART_HandleTypeDef   *pstUartHandle;
     #endif
-    
+
     uint8_t              *pucFrameHead;     // 帧头数组指针
     uint8_t               ucFrameHeadLen;   // 帧头长度
     uint8_t              *pucFrameTail;     // 帧尾数组指针
@@ -141,7 +141,6 @@ void vUartSendFloat(emUartDevNumTdf emDevNum, float fNum, uint8_t ucDecBit);
 
 /* 帧收发接口 */
 void vUartSendFrame(emUartDevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen);
-void vUartReceiveFrame(emUartDevNumTdf emDevNum);
 
 void vUartRegisterCallback(vUartFrameCallback vCallbackFcn);
 
@@ -191,9 +190,8 @@ vUartSendFrame(UART1, ucFrameData, sizeof(ucFrameData));
 while(1)
 {
     vUartDevicePeriodExecute(UART1); // 处理接收/帧解析
-    
+
     // 检测是否有接收到的帧数据（通过回调函数处理）
     HAL_Delay(10);
 }
 */
-
