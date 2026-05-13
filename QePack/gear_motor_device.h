@@ -32,10 +32,19 @@ typedef enum {
     emGearMotorAccPhase_Decel,        /* 减速阶段 */
 } emGearMotorAccPhaseTdf;
 
+/** @brief 位置模式梯形规划状态 */
+typedef enum {
+    emGearPosProfile_Accel = 0,  /* 加速阶段 */
+    emGearPosProfile_Cruise,     /* 匀速阶段 */
+    emGearPosProfile_Decel,      /* 减速阶段 */
+} emGearPosProfileStateTdf;
+
 /** @brief 减速电机控制模式枚举 */
 typedef enum {
     emGearMotorCtrlMode_Vel = 0,      /* 速度模式 */
+    emGearMotorCtrlMode_Pos,          /* 位置模式（串级PID） */
 } emGearMotorCtrlModeTdf;
+
 
 /**
  * @brief          减速电机静态参数结构体
@@ -67,7 +76,8 @@ typedef struct
     emEncoderDevNumTdf emEncoderDevNum;         // 编码器设备号
 
     /* PID 绑定参数 */
-    emPidDevNumTdf emPidDevNum;                 // 绑定的 PID 设备号（emNoPid = 不启用 PID）
+    emPidDevNumTdf emPidDevNum;                 // 速度环 PID 设备号（emNoPid = 不启用）
+    emPidDevNumTdf emPosPidDevNum;              // 位置环 PID 设备号（emNoPid = 不启用）
     uint16_t usPidPeriodMs;                     // PID 更新周期(ms)
 
     /* 占空比死区 */
@@ -105,6 +115,21 @@ typedef struct
     /* 预估时间 */
     fix32_t  fEstimatedTimeMs;                  // 预估到达目标的总时间(ms)
     fix32_t  fElapsedTimeMs;                    // 已用时间(ms)
+
+    /* 位置控制 */
+    int32_t  lTargetPos;                        // 目标位置（编码器脉冲数）
+    uint8_t  ucInPosition;                      // 到位标志
+    uint8_t  ucMotionEnable;                    // 运动使能
+
+    /* 位置模式专用速度上限（不污染 fMaxVelRPM，避免速度模式被错误限幅） */
+    fix32_t  fPosMaxVelRPM;                     // 位置模式最大速度(RPM)，0=使用静态参数
+
+    /* 梯形速度规划 */
+    fix32_t  fProfileSpd;                       // 当前规划速度 (RPM, Q16.16)
+    fix32_t  fAccStep;                          // 加速度步长 (RPM/ms, Q16.16)
+    fix32_t  fDecStep;                          // 减速度步长 (RPM/ms, Q16.16)
+    uint8_t  ucAccelEn;                         // 梯形规划使能
+
 }
 stGearMotorRunningParamTdf;
 
