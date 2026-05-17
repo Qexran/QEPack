@@ -118,11 +118,5 @@ emGrayStopStateTdf emGraySensorGetStopState(emGraySensorDevNumTdf emDevNum);
 /* 设置停止状态 */
 void vGraySensorSetStopState(emGraySensorDevNumTdf emDevNum, emGrayStopStateTdf emStopState);
 
-/* 设置停止检测冻结阈值 */
-void vGraySensorSetFreezeStopThreshold(emGraySensorDevNumTdf emDevNum, uint16_t usTime);
-
-/* 设置编码器目标值（停止检测用） */
-void vGraySensorSetEncoderTarget(emGraySensorDevNumTdf emDevNum, int32_t lEncoderTarget);
-
 #endif
 #endif

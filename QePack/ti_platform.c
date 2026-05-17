@@ -235,6 +235,7 @@ QE_StatusTypeDef TI_UART_Transmit(
     HAL_StatusTypeDef HAL_ADC_Start_DMA(
         ADC_HandleTypeDef* hadc, uint32_t* pData, uint32_t Length)
 */
+#if ADC_DEVICE_IS_ENABLE
 void TI_ADC_Start(stAdcTdf *pstAdcBase){
     // DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, (1024 * Length) >> 1);
 
@@ -254,6 +255,7 @@ void TI_ADC_Start(stAdcTdf *pstAdcBase){
     // DL_ADC12_enableDMA(pstAdcBase->adc_inst);
 }
 
+#endif
 
 /**
  * @brief 获取自系统启动以来的毫秒数
@@ -264,23 +266,43 @@ uint32_t TI_GetTick(void)
     return tick_ms;
 }
 
-void vTiClearFlashDebris(){
-    // 清除状态
+
+void vTiClearFlashDebris(void)
+{
+   // SysTick_Init();
+    
+    // 1. 关闭全局中断，防止Flash操作被打断
+    __disable_irq();
+
+    // 2. 清除Flash错误状态位
     DL_FlashCTL_executeClearStatus(FLASHCTL);
 
-    // 解锁扇区
+    // 3. 解锁最后一个安全扇区 0x0001F000
     DL_FlashCTL_unprotectSector(
         FLASHCTL,
-        (uint32_t)0x00010000,
+        0x0001F000,
         DL_FLASHCTL_REGION_SELECT_MAIN
     );
 
-    // 擦除
+    // 4. 扇区擦除
     DL_FlashCTL_eraseMemory(
         FLASHCTL,
-        (uint32_t)0x00010000,
+        0x0001F000,
         DL_FLASHCTL_COMMAND_SIZE_SECTOR
     );
+
+    // 5. 必须等待擦除完成，操作完再往下走
+    for(uint16_t i = 0;i < 5000; i++);
+
+    // 6. 重新加锁扇区，保护Flash
+    DL_FlashCTL_protectSector(
+        FLASHCTL,
+        0x0001F000,
+        DL_FLASHCTL_REGION_SELECT_MAIN
+    );
+
+    // 7. 恢复全局中断
+    __enable_irq();
 }
 
 

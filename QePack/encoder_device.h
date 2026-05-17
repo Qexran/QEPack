@@ -15,6 +15,7 @@
 #define _ENCODER_DEVICE_H_
 
 #include "string.h"
+#include "arithmetic.h"
 
 #if (QEPACK_PLATFORM == ST)
     #include "tim.h"
@@ -66,12 +67,14 @@ typedef struct {
     #endif
     
     uint16_t Roto_Ratio;                                // 倍频系数
-    
+
     uint16_t A_Round_Count;                             // 一圈的编码器计数
-    
+
+    fix32_t fGearRatio;                                  // 电机减速比（输出轴转速 = 编码器转速 / 减速比）
+
     emEncoderDirTdf Encoder_Dir;                        // 编码器方向
     
-    float Wheel_Diameter_mm;                            // 轮子直径（单位：毫米）
+    fix32_t fWheelDiameterMm;                            // 轮子直径（单位：毫米）
 
     #if !ENCODER_IS_USE_PARASITISM                      // 用于处理数据的定时器句柄
         #if (QEPACK_PLATFORM == TI)
@@ -87,8 +90,8 @@ typedef struct {
 typedef struct {
     int32_t TotalPosition;             // 当前位置
     int32_t LastPosition;              // 上一次位置
-    float Speed;                       // 当前速度（单位：转/分钟）
-    float Distance_mm;                 // 累计路程（单位：毫米）
+    fix32_t fSpeed;                    // 当前速度（单位：转/分钟）
+    fix32_t fDistanceMm;               // 累计路程（单位：毫米）
     //float LastSpeed;                   // 上一次速度
     int32_t times_reach;            // 到达ARR的次数
     uint16_t _1ms_time_count;            // 1ms计数
@@ -124,7 +127,7 @@ void vEncoderStartTimer(emEncoderDevNumTdf emDevNum, uint32_t u32Period);
     void vEncoderComputeSpeed(TIM_HandleTypeDef *htim);
 #endif
 
-//float fEncoderGetDistance(emEncoderDevNumTdf emDevNum);
+//fix32_t fEncoderGetDistance(emEncoderDevNumTdf emDevNum);
 
 /* 获取编码器数据状态 */
 //emEncoderDataStateTdf emEncoderGetDataState(emEncoderDevNumTdf emDevNum);
@@ -145,11 +148,11 @@ void vEncoderStartTimer(emEncoderDevNumTdf emDevNum, uint32_t u32Period);
     #endif
 #endif
 
-float fEncoderGetSpeed(emEncoderDevNumTdf emDevNum);
+fix32_t fEncoderGetSpeed(emEncoderDevNumTdf emDevNum);
 
 int32_t ulEncoderGetCount(emEncoderDevNumTdf emDevNum);
 
-float fEncoderGetDistance(emEncoderDevNumTdf emDevNum);
+fix32_t fEncoderGetDistance(emEncoderDevNumTdf emDevNum);
 
 void vEncoderResetDistance(emEncoderDevNumTdf emDevNum);
 
@@ -170,7 +173,7 @@ void vEncoderResetDistance(emEncoderDevNumTdf emDevNum);
     // 在主循环中获取数据
     while (1) {
         if (emEncoderGetDataState(emEncoderDevNum0) == UPDATED) {
-            float fSpeed = fEncoderGetSpeed(emEncoderDevNum0);
+            fix32_t fSpeed = fEncoderGetSpeed(emEncoderDevNum0);
             // 例如：vOledPrintf(OLED0, 1, 16, OLED_8X16, "Speed = %.2f RPM", fSpeed);
         }
     }

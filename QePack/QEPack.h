@@ -50,6 +50,14 @@
     #include "mpu6050_device.h"
 #endif
 
+#if BNO08X_IS_ENABLE
+    #include "bno08x_device.h"
+#endif
+
+#if IMU660RB_IS_ENABLE
+    #include "imu660rb_device.h"
+#endif
+
 #if ATK_MS901M_IS_ENABLE
     #include "atk_ms901m_device.h"
 #endif
@@ -60,6 +68,14 @@
 
 #if W25Q64_IS_ENABLE
     #include "w25q64_device.h"
+#endif
+
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+#endif
+
+#if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
+    #include "motor_system_controller.h"
 #endif
 
 #if ENCODER_IS_ENABLE
@@ -90,6 +106,12 @@
         .vI2cInitFunc     = SYSCFG_DL_##I2C_NAME##_init, \
 }
 
+#define TI_GET_ENCODER_STRUCTURE(TIMER_NAME) \
+    (stTimerTdf){ \
+        .timer_inst         = TIMER_NAME##_INST, \
+        .timer_irqn         = TIMER_NAME##_INST_INT_IRQN, \
+    }
+
 #define TI_GET_TIMER_STRUCTURE(TIMER_NAME) \
     (stTimerTdf){ \
         .timer_inst         = TIMER_NAME##_INST, \
@@ -109,6 +131,15 @@
         .adc_mem_idx      = ADC_NAME##_ADCMEM_0, \
         .voltage          = ADC_NAME##_ADCMEM_0_REF_VOLTAGE_V, \
         .adc_irqn         = ADC_NAME##_INST_INT_IRQN, \
+    }
+
+#define TI_GET_IMU660RB_SPI_STRUCTURE(BASE_NAME) \
+    (stImu660rbSpiTdf){ \
+        .spi_inst    = SPI_##BASE_NAME##_INST, \
+        .pstCsPort   = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_CS_PORT, \
+        .ulCsPin     = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_CS_PIN, \
+        .pstIntPort  = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_INT1_PORT, \
+        .ulIntPin    = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_INT1_PIN, \
     }
 
 #endif

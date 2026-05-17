@@ -1,38 +1,33 @@
-/** 
+/**
  * @file    pid_controller.c
  * @author  Qe_xr
- * @version V1.3.0
- * @date    2026/2/26
- * @brief   PID控制器模块，基于 STM32 HAL 库
+ * @version V2.0.0
+ * @date    2026/5/11
+ * @brief   PID控制器模块（定点数版本）
  */
 #include "pid_controller.h"
-#include <math.h>
 
 #if PID_IS_ENABLE
-
 
 stPidDeviceParamTdf astPidDeviceParam[PID_DEV_NUM];
 
 /**
  * @brief 计算积分系数
- * @param pstStatic PID静态参数指针
- * @param fError 当前误差
- * @return float 积分系数
  */
-static float fCalculateIntegralCoefficient(stPidStaticParamTdf *pstStatic, float fError)
+static fix32_t fCalculateIntegralCoefficient(stPidStaticParamTdf *pstStatic, fix32_t fError)
 {
-    float fAbsError = fabsf(fError);
-    float fCoefficient = 1.0f;
+    fix32_t fAbsError = fix32_abs(fError);
+    fix32_t fCoefficient = FIX32_ONE;
 
     if (pstStatic->EnableIntegralSeparation) {
         if (fAbsError > pstStatic->IntegralSeparationThreshold) {
-            return 0.0f;
+            return FIX32_ZERO;
         }
     }
 
     if (pstStatic->EnableVariableIntegral) {
-        float fBeta = pstStatic->VariableIntegralBeta;
-        fCoefficient = 1.0f / (1.0f + fBeta * fAbsError);
+        fix32_t fBeta = pstStatic->VariableIntegralBeta;
+        fCoefficient = fix32_div(FIX32_ONE, FIX32_ONE + fix32_mul(fBeta, fAbsError));
     }
 
     return fCoefficient;
@@ -40,19 +35,20 @@ static float fCalculateIntegralCoefficient(stPidStaticParamTdf *pstStatic, float
 
 /**
  * @brief 计算微分项
- * @param pstStatic PID静态参数指针
- * @param pstRunning PID运行参数指针
- * @param fError 当前误差
- * @param fLastError 上一次误差
- * @return float 微分项
  */
-static float fCalculateDerivative(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, float fError, float fLastError)
+static fix32_t fCalculateDerivative(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, fix32_t fError, fix32_t fFeedback, fix32_t fLastError)
 {
-    float fDerivative = (fError - fLastError) * pstStatic->Kd;
+    fix32_t fDerivative;
+
+    if (pstStatic->EnableDerivativeOnFeedback) {
+        fDerivative = fix32_mul(fFeedback - pstRunning->LastFeedback, pstStatic->Kd);
+    } else {
+        fDerivative = fix32_mul(fError - fLastError, pstStatic->Kd);
+    }
 
     if (pstStatic->EnableIncompleteDerivative) {
-        float fAlpha = pstStatic->IncompleteDerivativeAlpha;
-        fDerivative = fAlpha * fDerivative + (1.0f - fAlpha) * pstRunning->LastDerivative;
+        fix32_t fAlpha = pstStatic->IncompleteDerivativeAlpha;
+        fDerivative = fix32_mul(fAlpha, fDerivative) + fix32_mul(FIX32_ONE - fAlpha, pstRunning->LastDerivative);
         pstRunning->LastDerivative = fDerivative;
     }
 
@@ -61,77 +57,69 @@ static float fCalculateDerivative(stPidStaticParamTdf *pstStatic, stPidRunningPa
 
 /**
  * @brief 计算位置式PID输出
- * @param pstStatic PID静态参数指针
- * @param pstRunning PID运行参数指针
- * @param fReference 参考值
- * @param fFeedback 反馈值
  */
-static void vCalcPositionPID(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, float fReference, float fFeedback)
+static void vCalcPositionPID(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, fix32_t fReference, fix32_t fFeedback)
 {
     pstRunning->LastError = pstRunning->Error;
     pstRunning->Error = fReference - fFeedback;
 
-    float fDout = fCalculateDerivative(pstStatic, pstRunning, pstRunning->Error, pstRunning->LastError);
-    float fPout = pstRunning->Error * pstStatic->Kp;
-    float fIntegralCoeff = fCalculateIntegralCoefficient(pstStatic, pstRunning->Error);
-    pstRunning->Integral += pstRunning->Error * pstStatic->Ki * fIntegralCoeff;
+    fix32_t fPout = fix32_mul(pstRunning->Error, pstStatic->Kp);
+    fix32_t fIntegralCoeff = fCalculateIntegralCoefficient(pstStatic, pstRunning->Error);
 
-    if (pstRunning->Integral > pstStatic->MaxIntegral) {
-        pstRunning->Integral = pstStatic->MaxIntegral;
-    } else if (pstRunning->Integral < -pstStatic->MaxIntegral) {
-        pstRunning->Integral = -pstStatic->MaxIntegral;
+    /* 积分累加（饱和加法防溢出） */
+    fix32_t fErrKiCoeff = fix32_mul(fix32_mul(pstRunning->Error, pstStatic->Ki), fIntegralCoeff);
+    int64_t newIntegral = (int64_t)pstRunning->Integral + (int64_t)fErrKiCoeff;
+    if (newIntegral > (int64_t)pstStatic->MaxIntegral) {
+        newIntegral = (int64_t)pstStatic->MaxIntegral;
+    } else if (newIntegral < -(int64_t)pstStatic->MaxIntegral) {
+        newIntegral = -(int64_t)pstStatic->MaxIntegral;
     }
+    pstRunning->Integral = (fix32_t)newIntegral;
 
-    pstRunning->Output = fPout + fDout + pstRunning->Integral;
+    fix32_t fDout = fCalculateDerivative(pstStatic, pstRunning, pstRunning->Error, fFeedback, pstRunning->LastError);
 
-    if (pstRunning->Output > pstStatic->MaxOutput) {
-        pstRunning->Output = pstStatic->MaxOutput;
-    } else if (pstRunning->Output < -pstStatic->MaxOutput) {
-        pstRunning->Output = -pstStatic->MaxOutput;
-    }
+    /* 使用 int64_t 避免加法溢出 */
+    int64_t llOutput = (int64_t)fPout + (int64_t)pstRunning->Integral + (int64_t)fDout;
+    pstRunning->Output = fix32_sat((fix32_t)llOutput, -pstStatic->MaxOutput, pstStatic->MaxOutput);
+    pstRunning->LastFeedback = fFeedback;
 }
 
 /**
  * @brief 计算增量式PID输出
- * @param pstStatic PID静态参数指针
- * @param pstRunning PID运行参数指针
- * @param fReference 参考值
- * @param fFeedback 反馈值
  */
-static void vCalcIncrementalPID(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, float fReference, float fFeedback)
+static void vCalcIncrementalPID(stPidStaticParamTdf *pstStatic, stPidRunningParamTdf *pstRunning, fix32_t fReference, fix32_t fFeedback)
 {
     pstRunning->LastLastError = pstRunning->LastError;
     pstRunning->LastError = pstRunning->Error;
     pstRunning->Error = fReference - fFeedback;
 
-    float fIntegralCoeff = fCalculateIntegralCoefficient(pstStatic, pstRunning->Error);
-    float fDeltaP = pstStatic->Kp * (pstRunning->Error - pstRunning->LastError);
-    float fDeltaI = pstStatic->Ki * pstRunning->Error * fIntegralCoeff;
-    
-    float fCurrentDerivative = pstRunning->Error - 2.0f * pstRunning->LastError + pstRunning->LastLastError;
-    float fDeltaD = pstStatic->Kd * fCurrentDerivative;
-    
+    fix32_t fDeltaP = fix32_mul(pstStatic->Kp, pstRunning->Error - pstRunning->LastError);
+    fix32_t fDeltaI = fix32_mul(pstStatic->Ki, pstRunning->Error);
+
+    if (pstStatic->EnableIntegralSeparation) {
+        fix32_t fAbsError = fix32_abs(pstRunning->Error);
+        if (fAbsError > pstStatic->IntegralSeparationThreshold) {
+            fDeltaI = FIX32_ZERO;
+        }
+    }
+
+    fix32_t fCurrentDerivative = pstRunning->Error - (pstRunning->LastError * 2) + pstRunning->LastLastError;
+    fix32_t fDeltaD = fix32_mul(pstStatic->Kd, fCurrentDerivative);
+
     if (pstStatic->EnableIncompleteDerivative) {
-        float fAlpha = pstStatic->IncompleteDerivativeAlpha;
-        fDeltaD = fAlpha * fDeltaD + (1.0f - fAlpha) * pstRunning->LastDerivative;
+        fix32_t fAlpha = pstStatic->IncompleteDerivativeAlpha;
+        fDeltaD = fix32_mul(fAlpha, fDeltaD) + fix32_mul(FIX32_ONE - fAlpha, pstRunning->LastDerivative);
         pstRunning->LastDerivative = fDeltaD;
     }
 
-    float fDeltaOutput = fDeltaP + fDeltaI + fDeltaD;
-
-    pstRunning->Output += fDeltaOutput;
-
-    if (pstRunning->Output > pstStatic->MaxOutput) {
-        pstRunning->Output = pstStatic->MaxOutput;
-    } else if (pstRunning->Output < -pstStatic->MaxOutput) {
-        pstRunning->Output = -pstStatic->MaxOutput;
-    }
+    /* 使用 int64_t 避免累加溢出 */
+    int64_t llNewOutput = (int64_t)pstRunning->Output + (int64_t)fDeltaP + (int64_t)fDeltaI + (int64_t)fDeltaD;
+    pstRunning->Output = fix32_sat((fix32_t)llNewOutput, -pstStatic->MaxOutput, pstStatic->MaxOutput);
+    pstRunning->LastFeedback = fFeedback;
 }
 
 /**
  * @brief 获取PID设备参数
- * @param emDevNum PID设备号
- * @return const stPidDeviceParamTdf* PID设备参数指针
  */
 const stPidDeviceParamTdf *c_pstGetPidDeviceParam(emPidDevNumTdf emDevNum)
 {
@@ -143,8 +131,6 @@ const stPidDeviceParamTdf *c_pstGetPidDeviceParam(emPidDevNumTdf emDevNum)
 
 /**
  * @brief 初始化PID静态参数
- * @param pstInit PID静态参数指针
- * @param emDevNum PID设备号
  */
 void vPidDeviceInit(stPidStaticParamTdf *pstInit, emPidDevNumTdf emDevNum)
 {
@@ -152,18 +138,19 @@ void vPidDeviceInit(stPidStaticParamTdf *pstInit, emPidDevNumTdf emDevNum)
         return;
     }
 
-    memcpy(&astPidDeviceParam[emDevNum].stStaticParam, 
-           pstInit, 
+    memcpy(&astPidDeviceParam[emDevNum].stStaticParam,
+           pstInit,
            sizeof(stPidStaticParamTdf));
 
-    memset(&astPidDeviceParam[emDevNum].stRunningParam, 
-           0, 
+    memset(&astPidDeviceParam[emDevNum].stRunningParam,
+           0,
            sizeof(stPidRunningParamTdf));
+
+    astPidDeviceParam[emDevNum].stRunningParam.Enable = 1;
 }
 
 /**
  * @brief 重置PID运行参数
- * @param emDevNum PID设备号
  */
 void vPidReset(emPidDevNumTdf emDevNum)
 {
@@ -171,33 +158,31 @@ void vPidReset(emPidDevNumTdf emDevNum)
         return;
     }
 
-    memset(&astPidDeviceParam[emDevNum].stRunningParam, 
-           0, 
+    memset(&astPidDeviceParam[emDevNum].stRunningParam,
+           0,
            sizeof(stPidRunningParamTdf));
+    astPidDeviceParam[emDevNum].stRunningParam.Enable = 1;
 }
 
 /**
  * @brief 设置PID模式
- * @param emDevNum PID设备号
- * @param emMode PID模式
  */
-void vPidSetMode(emPidDevNumTdf emDevNum, emPidModeTdf emMode)
+void vPidSetMode(emPidDevNumTdf emDevNum, emPidModeTdf emMode, uint8_t bReset)
 {
     if (emDevNum >= PID_DEV_NUM) {
         return;
     }
 
     astPidDeviceParam[emDevNum].stStaticParam.Mode = emMode;
-    vPidReset(emDevNum);
+    if (bReset) {
+        vPidReset(emDevNum);
+    }
 }
 
 /**
  * @brief 计算PID输出
- * @param emDevNum PID设备号
- * @param fReference 参考值
- * @param fFeedback 反馈值
  */
-void vPidCalc(emPidDevNumTdf emDevNum, float fReference, float fFeedback)
+void vPidCalc(emPidDevNumTdf emDevNum, fix32_t fReference, fix32_t fFeedback)
 {
     if (emDevNum >= PID_DEV_NUM) {
         return;
@@ -205,6 +190,10 @@ void vPidCalc(emPidDevNumTdf emDevNum, float fReference, float fFeedback)
 
     stPidRunningParamTdf *pstRunning = &astPidDeviceParam[emDevNum].stRunningParam;
     stPidStaticParamTdf *pstStatic = &astPidDeviceParam[emDevNum].stStaticParam;
+
+    if (!pstRunning->Enable) {
+        return;
+    }
 
     if (pstStatic->Mode == emPidModePosition) {
         vCalcPositionPID(pstStatic, pstRunning, fReference, fFeedback);
@@ -215,15 +204,60 @@ void vPidCalc(emPidDevNumTdf emDevNum, float fReference, float fFeedback)
 
 /**
  * @brief 获取PID输出
- * @param emDevNum PID设备号
- * @return float PID输出
  */
-float fPidGetOutput(emPidDevNumTdf emDevNum)
+QE_StatusTypeDef ePidGetOutput(emPidDevNumTdf emDevNum, fix32_t *pfOutput)
+{
+    if (emDevNum >= PID_DEV_NUM || pfOutput == NULL) {
+        return QE_ERROR;
+    }
+    *pfOutput = astPidDeviceParam[emDevNum].stRunningParam.Output;
+    return QE_OK;
+}
+
+/**
+ * @brief 运行时修改 PID 参数
+ */
+void vPidSetParam(emPidDevNumTdf emDevNum, fix32_t fKp, fix32_t fKi, fix32_t fKd)
 {
     if (emDevNum >= PID_DEV_NUM) {
-        return 0.0f;
+        return;
     }
-    return astPidDeviceParam[emDevNum].stRunningParam.Output;
+    astPidDeviceParam[emDevNum].stStaticParam.Kp = fKp;
+    astPidDeviceParam[emDevNum].stStaticParam.Ki = fKi;
+    astPidDeviceParam[emDevNum].stStaticParam.Kd = fKd;
+}
+
+/**
+ * @brief 设置 PID 目标值
+ */
+void vPidSetTarget(emPidDevNumTdf emDevNum, fix32_t fTarget)
+{
+    if (emDevNum >= PID_DEV_NUM) {
+        return;
+    }
+    astPidDeviceParam[emDevNum].stRunningParam.Target = fTarget;
+}
+
+/**
+ * @brief 使能/禁用 PID
+ */
+void vPidSetEnable(emPidDevNumTdf emDevNum, uint8_t bEnable)
+{
+    if (emDevNum >= PID_DEV_NUM) {
+        return;
+    }
+    astPidDeviceParam[emDevNum].stRunningParam.Enable = bEnable;
+}
+
+/**
+ * @brief 获取 PID 目标值
+ */
+fix32_t fPidGetTarget(emPidDevNumTdf emDevNum)
+{
+    if (emDevNum >= PID_DEV_NUM) {
+        return FIX32_ZERO;
+    }
+    return astPidDeviceParam[emDevNum].stRunningParam.Target;
 }
 
 #endif

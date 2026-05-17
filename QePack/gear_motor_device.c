@@ -79,6 +79,27 @@ static fix32_t fCalcVelProfileTime(fix32_t fStartRPM, fix32_t fTargetRPM, fix32_
 }
 
 /* ==============================================
+   静态辅助函数：模式切换时重置 PID 并设置目标
+   ============================================== */
+/**
+ * @brief 在非速度模式切换到速度模式时重置 PID 并设定新目标
+ * @param emPidDevNum PID 设备号（emNoPid 则不操作）
+ * @param emPrevMode 之前的控制模式
+ * @param fTarget PID 目标值
+ */
+static void vGearMotorPidSwitchToVel(emPidDevNumTdf emPidDevNum,
+                                     emGearMotorCtrlModeTdf emPrevMode,
+                                     fix32_t fTarget)
+{
+    if (emPidDevNum != emNoPid) {
+        if (emPrevMode != emGearMotorCtrlMode_Vel) {
+            vPidReset(emPidDevNum);
+        }
+        vPidSetTarget(emPidDevNum, fTarget);
+    }
+}
+
+/* ==============================================
    虚方法表（VTable）：定义减速电机设备的虚函数接口
    ============================================== */
 static stMotorVTableTdf g_stGearMotorVTable = {
@@ -130,6 +151,137 @@ void vGearMotorInit(void *pstInit) {
 }
 
 /* ==============================================
+   位置模式周期执行：梯形速度规划 + 串级PID（位置环 → 速度环）
+   ============================================== */
+static void vGearMotorPosPeriodExecute(stGearMotorDeviceParamTdf *pstMotorDev)
+{
+    stGearMotorStaticParamTdf  *pstStatic = &pstMotorDev->stStaticParam;
+    stGearMotorRunningParamTdf *pstRun    = &pstMotorDev->stRunningParam;
+
+    int32_t lEncoderNow = (int32_t)ulEncoderGetCount(pstStatic->emEncoderDevNum);
+    fix32_t fCurrentSpd = fEncoderGetSpeed(pstStatic->emEncoderDevNum);
+
+    const stEncoderDeviceParamTdf *pstEncoder =
+        c_pstGetEncoderDeviceParam(pstStatic->emEncoderDevNum);
+    if (pstEncoder == NULL) return;
+    int32_t lCountsPerRev = (int32_t)pstEncoder->stStaticParam.A_Round_Count
+                          * (int32_t)pstEncoder->stStaticParam.Roto_Ratio;
+    if (lCountsPerRev == 0) return;
+
+    int32_t lRemaining    = pstRun->lTargetPos - lEncoderNow;
+    int32_t lAbsRemaining = (lRemaining >= 0) ? lRemaining : -lRemaining;
+    int8_t  bDirSign      = (lRemaining >= 0) ? 1 : -1;
+
+    fix32_t fProfileSpd = pstRun->fProfileSpd;
+    fix32_t fMaxVel     = (pstRun->fPosMaxVelRPM > FIX32_ZERO)
+                          ? pstRun->fPosMaxVelRPM
+                          : pstStatic->fMaxVelRPM;
+
+    /* ─── 1. 梯形速度规划 ─── */
+    int32_t lDecelPulses = 0;
+    if (pstRun->ucAccelEn) {
+        fix32_t fAccStep = pstRun->fAccStep;
+        fix32_t fDecStep = pstRun->fDecStep;
+
+        int64_t llNum = (int64_t)fProfileSpd * (int64_t)fProfileSpd
+                      * (int64_t)lCountsPerRev;
+        int64_t llDen = (int64_t)120000 * (int64_t)fDecStep;
+        if (llDen > 0) {
+            lDecelPulses = (int32_t)((llNum >> FIX32_FRAC_BITS) / llDen);
+        } else {
+            lDecelPulses = 1;
+        }
+        if (lDecelPulses < 1) lDecelPulses = 1;
+
+        if (lDecelPulses >= lAbsRemaining || lAbsRemaining < 10) {
+            fProfileSpd -= fDecStep;
+            if (fProfileSpd < FIX32_ZERO) fProfileSpd = FIX32_ZERO;
+        } else if (fProfileSpd < fMaxVel) {
+            fProfileSpd += fAccStep;
+            if (fProfileSpd > fMaxVel) fProfileSpd = fMaxVel;
+        }
+    } else {
+        fProfileSpd = fMaxVel;
+    }
+    pstRun->fProfileSpd = fProfileSpd;
+
+    /* ─── 2. 位置环 PID ─── */
+    fix32_t fSignedProfileSpd = (bDirSign > 0) ? fProfileSpd : -fProfileSpd;
+    fix32_t fVelCmd = fSignedProfileSpd;
+
+    if (pstStatic->emPosPidDevNum != emNoPid) {
+        int32_t lPosErr = pstRun->lTargetPos - lEncoderNow;
+        const stPidDeviceParamTdf *pstPosPid =
+            c_pstGetPidDeviceParam(pstStatic->emPosPidDevNum);
+        if (pstPosPid != NULL) {
+            fix32_t fKpPos = pstPosPid->stStaticParam.Kp;
+            int64_t llCorrection = (int64_t)fKpPos * (int64_t)lPosErr;
+            fix32_t fPosCorrection;
+            if (llCorrection > (int64_t)FIX32_MAX)
+                fPosCorrection = FIX32_MAX;
+            else if (llCorrection < (int64_t)FIX32_MIN)
+                fPosCorrection = FIX32_MIN;
+            else
+                fPosCorrection = (fix32_t)llCorrection;
+            fPosCorrection = fix32_sat(fPosCorrection,
+                (fix32_t)(-20 * 65536), (fix32_t)(20 * 65536));
+            fVelCmd += fPosCorrection;
+        }
+    }
+
+    /* 速度限幅 */
+    fix32_t fAbsVelCmd = fix32_abs(fVelCmd);
+    {
+        fix32_t fLimit = (pstRun->fPosMaxVelRPM > FIX32_ZERO)
+                         ? pstRun->fPosMaxVelRPM
+                         : pstStatic->fMaxVelRPM;
+        if (fLimit > FIX32_ZERO) {
+            fix32_t fAbsMax = fLimit
+                            + fix32_div(fLimit, ((fix32_t)(2 * 65536)));
+            fAbsVelCmd = fix32_sat(fAbsVelCmd, FIX32_ZERO, fAbsMax);
+        }
+    }
+    emMotorDirTdf emPosDir = (fVelCmd >= FIX32_ZERO)
+                             ? emMotorDir_Forward : emMotorDir_Backward;
+    fix32_t fAbsCurrentSpd = fix32_abs(fCurrentSpd);
+
+    /* ─── 3. 速度环 PID ─── */
+    fix32_t fPwmOutput = fAbsVelCmd;
+    if (pstStatic->emPidDevNum != emNoPid) {
+        uint32_t ulNow = GEAR_MOTOR_GET_TICK();
+        if (ulNow - pstRun->ulPidLastTickMs >= pstStatic->usPidPeriodMs) {
+            pstRun->ulPidLastTickMs = ulNow;
+            vPidCalc(pstStatic->emPidDevNum, fAbsVelCmd, fAbsCurrentSpd);
+        }
+        fix32_t fPidOut;
+        if (ePidGetOutput(pstStatic->emPidDevNum, &fPidOut) == QE_OK) {
+            if (lDecelPulses >= lAbsRemaining) {
+                fPidOut = fix32_sat(fPidOut,
+                    (fix32_t)(-10 * 65536), (fix32_t)(10 * 65536));
+            }
+            fPwmOutput += fPidOut;
+        }
+    }
+    if (fPwmOutput < FIX32_ZERO) fPwmOutput = FIX32_ZERO;
+
+    int16_t sFinalSpeed = (int16_t)FIX32_TO_INT(fPwmOutput);
+    if (emPosDir == emMotorDir_Backward) sFinalSpeed = -sFinalSpeed;
+    vGearMotorSetSpeed(pstMotorDev, sFinalSpeed);
+
+    /* ─── 4. 到位检测 ─── */
+    if (lAbsRemaining <= 10 && FIX32_TO_INT(fAbsCurrentSpd) < 10) {
+        pstRun->ucInPosition   = 1;
+        pstRun->ucMotionEnable = 0;
+        if (pstStatic->emPidDevNum != emNoPid)
+            vPidReset(pstStatic->emPidDevNum);
+        if (pstStatic->emPosPidDevNum != emNoPid)
+            vPidReset(pstStatic->emPosPidDevNum);
+        vGearMotorSetSpeed(pstMotorDev, 0);
+        pstMotorDev->stBase.emMotorState = emMotorStateStop;
+    }
+}
+
+/* ==============================================
    虚方法实现：周期性执行函数（核心控制循环）
    ============================================== */
 /**
@@ -153,148 +305,9 @@ void vGearMotorPeriodExecute(void *pstMotor) {
         return;
     }
 
-    /* ==============================================
-        位置模式：梯形速度规划 + 串级PID（位置环 → 速度环）
-       ============================================== */
+    /* 位置模式：梯形速度规划 + 串级PID */
     if (pstRun->emCtrlMode == emGearMotorCtrlMode_Pos && pstRun->ucMotionEnable) {
-
-        int32_t lEncoderNow = (int32_t)ulEncoderGetCount(pstStatic->emEncoderDevNum);
-        fix32_t fCurrentSpd = fEncoderGetSpeed(pstStatic->emEncoderDevNum);
-
-        /* 获取编码器参数用于 RPM↔脉冲 换算 */
-        const stEncoderDeviceParamTdf *pstEncoder =
-            c_pstGetEncoderDeviceParam(pstStatic->emEncoderDevNum);
-        if (pstEncoder == NULL) return;
-        int32_t lCountsPerRev = (int32_t)pstEncoder->stStaticParam.A_Round_Count
-                              * (int32_t)pstEncoder->stStaticParam.Roto_Ratio;
-        if (lCountsPerRev == 0) return;
-
-        /* 计算剩余距离与方向 */
-        int32_t lRemaining = pstRun->lTargetPos - lEncoderNow;
-        int32_t lAbsRemaining = (lRemaining >= 0) ? lRemaining : -lRemaining;
-        int8_t  bDirSign = (lRemaining >= 0) ? 1 : -1;
-
-        fix32_t fProfileSpd = pstRun->fProfileSpd;
-        fix32_t fMaxVel     = (pstRun->fPosMaxVelRPM > FIX32_ZERO)
-                              ? pstRun->fPosMaxVelRPM
-                              : pstStatic->fMaxVelRPM;
-
-        /* ─── 1. 梯形速度规划 ─── */
-        int32_t lDecelPulses = 0;  /* 提升作用域，供速度环限幅使用 */
-        if (pstRun->ucAccelEn) {
-            fix32_t fAccStep = pstRun->fAccStep;
-            fix32_t fDecStep = pstRun->fDecStep;
-
-            /* 减速到零所需脉冲数：v² × counts / (120000 × dec_step)
-               使用 int64 全程计算，避免 Q16.16 中间结果溢出：
-               - fix32_from_int(60000) 溢出 int32（Bug 1）
-               - fix32_div 结果 > FIX32_MAX 时饱和（Bug 2，v≥36 RPM 触发） */
-            int64_t llNum = (int64_t)fProfileSpd * (int64_t)fProfileSpd
-                          * (int64_t)lCountsPerRev;
-            int64_t llDen = (int64_t)120000 * (int64_t)fDecStep;
-            if (llDen > 0) {
-                lDecelPulses = (int32_t)((llNum >> FIX32_FRAC_BITS) / llDen);
-            } else {
-                lDecelPulses = 1;
-            }
-
-            if (lDecelPulses < 1) lDecelPulses = 1;
-
-            if (lDecelPulses >= lAbsRemaining || lAbsRemaining < 10) {
-                /* 减速阶段：剩余距离小于等于减速所需距离，或已贴近目标 */
-                fProfileSpd -= fDecStep;
-                if (fProfileSpd < FIX32_ZERO) fProfileSpd = FIX32_ZERO;
-            } else if (fProfileSpd < fMaxVel) {
-                /* 加速阶段 */
-                fProfileSpd += fAccStep;
-                if (fProfileSpd > fMaxVel) fProfileSpd = fMaxVel;
-            }
-            /* else: 匀速阶段 */
-        } else {
-            fProfileSpd = fMaxVel;
-        }
-
-        pstRun->fProfileSpd = fProfileSpd;
-
-        /* ─── 2. 位置环 PID（全程在线，输出叠加到梯形规划速度）─── */
-        fix32_t fSignedProfileSpd = (bDirSign > 0) ? fProfileSpd : -fProfileSpd;
-        fix32_t fVelCmd = fSignedProfileSpd;
-
-        if (pstStatic->emPosPidDevNum != emNoPid) {
-            /* 位置环 P 控制器：直接从整数误差计算修正量，避免 fix32_from_int 溢出
-               fPosCorrection = Kp * lPosErr，使用 int64 乘法防溢出，结果限幅 ±20 RPM */
-            int32_t lPosErr = pstRun->lTargetPos - lEncoderNow;
-            const stPidDeviceParamTdf *pstPosPid =
-                c_pstGetPidDeviceParam(pstStatic->emPosPidDevNum);
-            if (pstPosPid != NULL) {
-                fix32_t fKpPos = pstPosPid->stStaticParam.Kp;
-                int64_t llCorrection = (int64_t)fKpPos * (int64_t)lPosErr;
-                fix32_t fPosCorrection;
-                if (llCorrection > (int64_t)FIX32_MAX)
-                    fPosCorrection = FIX32_MAX;
-                else if (llCorrection < (int64_t)FIX32_MIN)
-                    fPosCorrection = FIX32_MIN;
-                else
-                    fPosCorrection = (fix32_t)llCorrection;
-                fPosCorrection = fix32_sat(fPosCorrection,
-                    (fix32_t)(-20 * 65536), (fix32_t)(20 * 65536));
-                fVelCmd += fPosCorrection;
-            }
-        }
-
-        /* 速度限幅：上限放宽到 1.5 倍，允许位置环正向修正 */
-        fix32_t fAbsVelCmd = fix32_abs(fVelCmd);
-        {
-            fix32_t fLimit = (pstRun->fPosMaxVelRPM > FIX32_ZERO)
-                             ? pstRun->fPosMaxVelRPM
-                             : pstStatic->fMaxVelRPM;
-            if (fLimit > FIX32_ZERO) {
-                fix32_t fAbsMax = fLimit
-                                + fix32_div(fLimit, ((fix32_t)(2 * 65536)));
-                fAbsVelCmd = fix32_sat(fAbsVelCmd, FIX32_ZERO, fAbsMax);
-            }
-        }
-        emMotorDirTdf emPosDir = (fVelCmd >= FIX32_ZERO)
-                                 ? emMotorDir_Forward : emMotorDir_Backward;
-        fix32_t fAbsCurrentSpd = fix32_abs(fCurrentSpd);
-
-        /* ─── 3. 速度环 PID（跟踪 规划速度 + 位置环修正）─── */
-        fix32_t fPwmOutput = fAbsVelCmd;
-        if (pstStatic->emPidDevNum != emNoPid) {
-            uint32_t ulNow = GEAR_MOTOR_GET_TICK();
-            if (ulNow - pstRun->ulPidLastTickMs >= pstStatic->usPidPeriodMs) {
-                pstRun->ulPidLastTickMs = ulNow;
-                vPidCalc(pstStatic->emPidDevNum, fAbsVelCmd, fAbsCurrentSpd);
-            }
-            fix32_t fPidOut;
-            if (ePidGetOutput(pstStatic->emPidDevNum, &fPidOut) == QE_OK) {
-                /* 减速阶段限幅 ±10 防积分拖累，其余阶段不限幅保证跟踪 */
-                if (lDecelPulses >= lAbsRemaining) {
-                    fPidOut = fix32_sat(fPidOut,
-                        (fix32_t)(-10 * 65536), (fix32_t)(10 * 65536));
-                }
-                fPwmOutput += fPidOut;
-            }
-        }
-
-        if (fPwmOutput < FIX32_ZERO) fPwmOutput = FIX32_ZERO;
-
-        /* 方向写入电机 */
-        int16_t sFinalSpeed = (int16_t)FIX32_TO_INT(fPwmOutput);
-        if (emPosDir == emMotorDir_Backward) sFinalSpeed = -sFinalSpeed;
-        vGearMotorSetSpeed(pstMotorDev, sFinalSpeed);
-
-        /* ─── 4. 到位检测 ─── */
-        if (lAbsRemaining <= 10 && FIX32_TO_INT(fAbsCurrentSpd) < 10) {
-            pstRun->ucInPosition   = 1;
-            pstRun->ucMotionEnable = 0;
-            if (pstStatic->emPidDevNum != emNoPid)
-                vPidReset(pstStatic->emPidDevNum);
-            if (pstStatic->emPosPidDevNum != emNoPid)
-                vPidReset(pstStatic->emPosPidDevNum);
-            vGearMotorSetSpeed(pstMotorDev, 0);
-            pstMotorDev->stBase.emMotorState = emMotorStateStop;
-        }
+        vGearMotorPosPeriodExecute(pstMotorDev);
         return;
     }
 
@@ -440,7 +453,6 @@ void vGearMotorPeriodExecute(void *pstMotor) {
         fix32_t fPidOutput;
         if (ePidGetOutput(pstStatic->emPidDevNum, &fPidOutput) == QE_OK) {
             fOutputSpeed = fPidOutput + fSetpointSpeed;
-            float fSpeedOrg = fix32_to_float(fOutputSpeed);
         } else {
             fOutputSpeed = fSetpointSpeed;
         }
@@ -701,13 +713,7 @@ void vGearMotorVelControl(
         pstRun->fElapsedTimeMs = FIX32_ZERO;
         pstRun->emCurrentDir = emDir;
 
-        /* 模式切换时重置 PID 并设置新目标，避免旧积分/输出残留导致电机卡死 */
-        if (pstStatic->emPidDevNum != emNoPid) {
-            if (emPrevMode != emGearMotorCtrlMode_Vel) {
-                vPidReset(pstStatic->emPidDevNum);
-            }
-            vPidSetTarget(pstStatic->emPidDevNum, fTargetRPM);
-        }
+        vGearMotorPidSwitchToVel(pstStatic->emPidDevNum, emPrevMode, fTargetRPM);
 
         /* 直接设置速度 */
         int16_t sSpeed = (int16_t)FIX32_TO_INT(fTargetRPM);
@@ -760,13 +766,7 @@ void vGearMotorVelControl(
         pstRun->fEstimatedTimeMs = fCalcVelProfileTime(fCurrentAbsSetpoint, FIX32_ZERO, fAccelRPMpS)
                                  + fCalcVelProfileTime(FIX32_ZERO, fTargetRPM, fAccelRPMpS);
         
-        /* PID 跟踪减速过程，模式切换时先重置避免旧积分残留 */
-        if (pstStatic->emPidDevNum != emNoPid) {
-            if (emPrevMode != emGearMotorCtrlMode_Vel) {
-                vPidReset(pstStatic->emPidDevNum);
-            }
-            vPidSetTarget(pstStatic->emPidDevNum, FIX32_ZERO);
-        }
+        vGearMotorPidSwitchToVel(pstStatic->emPidDevNum, emPrevMode, FIX32_ZERO);
     } else {
         /* 方向未变：直接从当前速度向目标速度过渡 */
         pstRun->emCurrentDir = emDir;
@@ -788,13 +788,7 @@ void vGearMotorVelControl(
         /* 计算预估完成时间 */
         pstRun->fEstimatedTimeMs = fCalcVelProfileTime(fCurrentAbsSetpoint, fTargetRPM, fAccelRPMpS);
 
-        /* PID 设置目标速度（仅在模式切换时重置，允许连续调速保留积分） */
-        if (pstStatic->emPidDevNum != emNoPid) {
-            if (emPrevMode != emGearMotorCtrlMode_Vel) {
-                vPidReset(pstStatic->emPidDevNum);  /* 模式切换时重置PID */
-            }
-            vPidSetTarget(pstStatic->emPidDevNum, fTargetRPM);
-        }
+        vGearMotorPidSwitchToVel(pstStatic->emPidDevNum, emPrevMode, fTargetRPM);
     }
 
     /* 设置电机状态为运行 */

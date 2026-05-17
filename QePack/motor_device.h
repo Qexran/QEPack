@@ -115,7 +115,7 @@ typedef struct stMotorVTableTdf
  * @brief          电机基类结构体
  * @note           所有电机类型的基类
  */
-typedef struct stMotorDeviceTdf
+typedef struct stMotorDeviceTdf 
 {
     emMotorTypeTdf     emType;              /* 电机类型 */
     stMotorVTableTdf   *pstVTable;          /* 虚方法表 */

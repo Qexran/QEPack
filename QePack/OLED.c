@@ -336,6 +336,10 @@ void vOledDeviceInit(stOledStaticParamTdf *pstInit, emOledDevNumTdf emDevNum)
 		for(j = 0; j < 1000; j++){
 		}
 	}
+
+	#if (OLED_IS_USE_HARDWARE == 0)
+		TI_Delay(500);
+	#endif
 	
 	/*写入一系列的命令，对OLED进行初始化配置*/				
 	OLED_WriteCommand(emDevNum, 0xAE);					//设置显示开启/关闭，0xAE关闭，0xAF开启

@@ -1,12 +1,12 @@
 /**
-  * @file       adc_device.h
+  * @file       atk_ms901m_device.h
   * @author     正点原子团队(ALIENTEK) & Qe_xr
-  * @version    V1.2.0
-  * @date       2026/2/17
-  * @brief      ATK-MS901M 模块驱动，基于 STM32 HAL 库
-  * 
+  * @version    V1.3.0
+  * @date       2026/05/14
+  * @brief      ATK-MS901M 模块驱动，基于 STM32 HAL 库 / TI DriverLib
+  *             支持阻塞轮询模式和流式缓存回调模式
   */
-  
+
 #include "project_config.h"
 
 #if ATK_MS901M_IS_ENABLE
@@ -15,6 +15,15 @@
 #define __ATK_MS901M_DEVICE_H
 
 #include "uart_device.h"
+
+/* ATK-MS901M 设备号枚举 */
+typedef enum
+{
+    emAtkMs901mDevNum0 = 0,                         // ATK-MS901M0
+    emAtkMs901mDevNum1,                             // ATK-MS901M1
+    emAtkMs901mDevNum2,                             // ATK-MS901M2
+    emAtkMs901mDevNum3,                             // ATK-MS901M3
+} emAtkMs901mDevNumTdf;
 
 /* ATK-MS901M UART通讯帧数据最大长度 */
 #define ATK_MS901M_FRAME_DAT_MAX_SIZE       28
@@ -132,8 +141,8 @@ typedef struct
 /* ATK-MS901M LED状态枚举 */
 typedef enum
 {
-    ATK_MS901M_LED_STATE_ON  = 0x00,                /* LED灯关闭 */
-    ATK_MS901M_LED_STATE_OFF = 0x01,                /* LED灯打开 */
+    ATK_MS901M_LED_STATE_ON  = 0x00,                /* LED灯打开 */
+    ATK_MS901M_LED_STATE_OFF = 0x01,                /* LED灯关闭 */
 } atk_ms901m_led_state_t;
 
 /* ATK-MS901M端口枚举 */
@@ -161,24 +170,90 @@ typedef enum
 #define ATK_MS901M_EINVAL   2                       /* 错误函数参数 */
 #define ATK_MS901M_ETIMEOUT 3                       /* 超时错误 */
 
-/* 操作函数 */
-uint8_t atk_ms901m_read_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t *dat, uint32_t timeout);                                                                      /* 通过帧ID读取ATK-MS901M寄存器 */
-uint8_t atk_ms901m_write_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t len, uint8_t *dat);                                                                          /* 通过帧ID写入ATK-MS901M寄存器 */
-uint8_t atk_ms901m_init(emUartDevNumTdf emDevNum);                                                                                                         /* ATK-MS901M初始化 */
-uint8_t atk_ms901m_get_attitude(emUartDevNumTdf emDevNum, atk_ms901m_attitude_data_t *attitude_dat, uint32_t timeout);                                                        /* 获取ATK-MS901M姿态角数据 */
-uint8_t atk_ms901m_get_quaternion(emUartDevNumTdf emDevNum, atk_ms901m_quaternion_data_t *quaternion_dat, uint32_t timeout);                                                  /* 获取ATK-MS901M四元数数据 */
-uint8_t atk_ms901m_get_gyro_accelerometer(emUartDevNumTdf emDevNum, atk_ms901m_gyro_data_t *gyro_dat, atk_ms901m_accelerometer_data_t *accelerometer_dat, uint32_t timeout);  /* 获取ATK-MS901M陀螺仪、加速度计数据 */
-uint8_t atk_ms901m_get_magnetometer(emUartDevNumTdf emDevNum, atk_ms901m_magnetometer_data_t *magnetometer_dat, uint32_t timeout);                                            /* 获取ATK-MS901M磁力计数据 */
-uint8_t atk_ms901m_get_barometer(emUartDevNumTdf emDevNum, atk_ms901m_barometer_data_t *barometer_dat, uint32_t timeout);                                                     /* 获取ATK-MS901M气压计数据 */
-uint8_t atk_ms901m_get_port(emUartDevNumTdf emDevNum, atk_ms901m_port_data_t *port_dat, uint32_t timeout);                                                                    /* 获取ATK-MS901M端口数据 */
-uint8_t atk_ms901m_get_led_state(emUartDevNumTdf emDevNum, atk_ms901m_led_state_t *state, uint32_t timeout);                                                                  /* 获取ATK-MS901M LED灯状态 */
-uint8_t atk_ms901m_set_led_state(emUartDevNumTdf emDevNum, atk_ms901m_led_state_t state, uint32_t timeout);                                                                   /* 设置ATK-MS901M LED灯状态 */
-uint8_t atk_ms901m_get_port_mode(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, atk_ms901m_port_mode_t *mode, uint32_t timeout);                                           /* 获取ATK-MS901M指定端口模式 */
-uint8_t atk_ms901m_set_port_mode(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, atk_ms901m_port_mode_t mode, uint32_t timeout);                                            /* 设置ATK-MS901M指定端口模式 */
-uint8_t atk_ms901m_get_port_pwm_pulse(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t *pulse, uint32_t timeout);                                                   /* 获取ATK-MS901M指定端口PWM高电平的宽度 */
-uint8_t atk_ms901m_set_port_pwm_pulse(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t pulse, uint32_t timeout);                                                    /* 设置ATK-MS901M指定端口PWM高电平的宽度 */
-uint8_t atk_ms901m_get_port_pwm_period(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t *period, uint32_t timeout);                                                 /* 获取ATK-MS901M指定端口PWM周期 */
-uint8_t atk_ms901m_set_port_pwm_period(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t period, uint32_t timeout);                                                  /* 设置ATK-MS901M指定端口PWM周期 */
+/* ======================== 阻塞轮询 API（兼容模式） ======================== */
+/* 调用后阻塞等待，直到收到指定帧或超时。适用于偶尔查询的场景。     */
+/* 注意：阻塞期间会持续轮询 UART 环形缓冲区，不可在中断中调用。   */
+
+uint8_t atk_ms901m_read_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t *dat, uint32_t timeout);
+uint8_t atk_ms901m_write_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t len, uint8_t *dat);
+uint8_t atk_ms901m_init(emUartDevNumTdf emDevNum);
+uint8_t atk_ms901m_init_default(emUartDevNumTdf emDevNum);                           /* 低配版模块专用：跳过寄存器读取，使用默认FSR */
+uint8_t atk_ms901m_get_attitude(emUartDevNumTdf emDevNum, atk_ms901m_attitude_data_t *attitude_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_quaternion(emUartDevNumTdf emDevNum, atk_ms901m_quaternion_data_t *quaternion_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_gyro_accelerometer(emUartDevNumTdf emDevNum, atk_ms901m_gyro_data_t *gyro_dat, atk_ms901m_accelerometer_data_t *accelerometer_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_magnetometer(emUartDevNumTdf emDevNum, atk_ms901m_magnetometer_data_t *magnetometer_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_barometer(emUartDevNumTdf emDevNum, atk_ms901m_barometer_data_t *barometer_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_port(emUartDevNumTdf emDevNum, atk_ms901m_port_data_t *port_dat, uint32_t timeout);
+uint8_t atk_ms901m_get_led_state(emUartDevNumTdf emDevNum, atk_ms901m_led_state_t *state, uint32_t timeout);
+uint8_t atk_ms901m_set_led_state(emUartDevNumTdf emDevNum, atk_ms901m_led_state_t state, uint32_t timeout);
+uint8_t atk_ms901m_get_port_mode(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, atk_ms901m_port_mode_t *mode, uint32_t timeout);
+uint8_t atk_ms901m_set_port_mode(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, atk_ms901m_port_mode_t mode, uint32_t timeout);
+uint8_t atk_ms901m_get_port_pwm_pulse(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t *pulse, uint32_t timeout);
+uint8_t atk_ms901m_set_port_pwm_pulse(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t pulse, uint32_t timeout);
+uint8_t atk_ms901m_get_port_pwm_period(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t *period, uint32_t timeout);
+uint8_t atk_ms901m_set_port_pwm_period(emUartDevNumTdf emDevNum, atk_ms901m_port_t port, uint16_t period, uint32_t timeout);
+
+/* ====================== 流式缓存 API（推荐高频场景） ====================== */
+/* 模块接管 UART 回调，在 vUartDevicePeriodExecute 中自动解析所有帧并缓存。 */
+/* 用户调用 atk_ms901m_read_xxx() 零阻塞读取最新数据。                    */
+
+/**
+ * @brief  启动流式缓存模式
+ * @param  emDevNum    : ATK-MS901M 设备号
+ * @param  emUartDevNum: 绑定的 UART 设备号
+ * @note   调用前需先完成 UART 的 vUartDeviceInit() 和 atk_ms901m_init()
+ *         此后 UART 回调由本模块接管，用户不应再设置 vCallbackFcn
+ *         解析在 vUartDevicePeriodExecute() 上下文中完成，建议每 1ms 调用
+ * @retval ATK_MS901M_EOK  : 启动成功
+ *         ATK_MS901M_ERROR: 启动失败（设备号越界）
+ */
+uint8_t atk_ms901m_start_streaming(emAtkMs901mDevNumTdf emDevNum, emUartDevNumTdf emUartDevNum);
+
+/**
+ * @brief  停止流式缓存模式
+ * @param  emDevNum: ATK-MS901M 设备号
+ * @note   恢复 UART 回调为空，之后可使用阻塞 API
+ */
+void atk_ms901m_stop_streaming(emAtkMs901mDevNumTdf emDevNum);
+
+/**
+ * @brief  读取姿态角（非阻塞，返回最新缓存值）
+ * @param  emDevNum    : ATK-MS901M 设备号
+ * @param  attitude_dat: 姿态角输出
+ * @retval ATK_MS901M_EOK  : 读取成功
+ *         ATK_MS901M_ERROR: 尚无数据（模块未启动流式或还未收到帧）
+ */
+uint8_t atk_ms901m_read_attitude(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_attitude_data_t *attitude_dat);
+
+/**
+ * @brief  读取四元数（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_quaternion(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_quaternion_data_t *quaternion_dat);
+
+/**
+ * @brief  读取陀螺仪数据（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_gyro(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_gyro_data_t *gyro_dat);
+
+/**
+ * @brief  读取加速度计数据（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_accelerometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_accelerometer_data_t *accelerometer_dat);
+
+/**
+ * @brief  读取磁力计数据（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_magnetometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_magnetometer_data_t *magnetometer_dat);
+
+/**
+ * @brief  读取气压计数据（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_barometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_barometer_data_t *barometer_dat);
+
+/**
+ * @brief  读取端口数据（非阻塞，返回最新缓存值）
+ */
+uint8_t atk_ms901m_read_port(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_port_data_t *port_dat);
 
 #endif
 

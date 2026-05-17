@@ -1,12 +1,15 @@
-/** 
+/**
  * @file    encoder_device.c
  * @author  Qe_xr
- * @version V1.0.0
- * @date    2026/2/21
- * @brief   编码器驱动模块，基于 STM32 HAL 库
+ * @version V2.0.0
+ * @date    2026/5/12
+ * @brief   编码器驱动模块 — 定点数版本 (Q16.16)
  */
 #include "encoder_device.h"
 #if ENCODER_IS_ENABLE
+
+/* 编译期定点数常量 */
+#define FIX32_3_14159    ((fix32_t)205887)   /* 3.14159265 in Q16.16 */
 
 stEncoderDeviceParamTdf astEncoderDeviceParam[ENCODER_DEV_NUM];
 
@@ -24,32 +27,29 @@ const stEncoderDeviceParamTdf *c_pstGetEncoderDeviceParam(emEncoderDevNumTdf emD
 }
 
 /**
- * @brief 中位值平均滤波
- * @param fValue 输入值
+ * @brief 中位值平均滤波（定点数版本）
+ * @param fValue 输入值 (Q16.16)
  * @param afBuffer 缓冲区指针
  * @param u8BufferSize 缓冲区大小
- * @return float 中位值平均滤波后的值
+ * @return fix32_t 中位值平均滤波后的值
  */
-float fMedianFilter(float fValue, float* afBuffer, uint8_t u8BufferSize)
+fix32_t fixMedianFilter(fix32_t fValue, fix32_t* afBuffer, uint8_t u8BufferSize)
 {
-    // 将新值加入缓冲区
     for (int i = u8BufferSize - 1; i > 0; i--) {
         afBuffer[i] = afBuffer[i - 1];
     }
     afBuffer[0] = fValue;
-    
-    // 排序缓冲区
+
     for (int i = 0; i < u8BufferSize; i++) {
         for (int j = i + 1; j < u8BufferSize; j++) {
             if (afBuffer[i] > afBuffer[j]) {
-                float temp = afBuffer[i];
+                fix32_t temp = afBuffer[i];
                 afBuffer[i] = afBuffer[j];
                 afBuffer[j] = temp;
             }
         }
     }
-    
-    // 返回中间值
+
     return afBuffer[u8BufferSize / 2];
 }
 
@@ -169,10 +169,8 @@ void vEncoderDeviceInit(stEncoderStaticParamTdf *pstInit, emEncoderDevNumTdf emD
         #endif
     #endif
     
-    // 初始化LastPosition为当前编码器位置
     astEncoderDeviceParam[emDevNum].stRunningParam.LastPosition = lEncoderGetEncoder(emDevNum);
-    //astEncoderDeviceParam[emDevNum].stRunningParam.LastPositionForDistance = lEncoderGetEncoder(emDevNum);
-    astEncoderDeviceParam[emDevNum].stRunningParam.Distance_mm = 0.0f;
+    astEncoderDeviceParam[emDevNum].stRunningParam.fDistanceMm = FIX32_ZERO;
 }
 
 /**
@@ -188,54 +186,47 @@ int32_t ulEncoderGetCount(emEncoderDevNumTdf emDevNum){
 /**
  * @brief 获取编码器速度
  * @param emDevNum 编码器设备号
- * @return float 编码器速度
+ * @return fix32_t 编码器速度 (Q16.16)
  */
-float fEncoderGetSpeed(emEncoderDevNumTdf emDevNum){
-    return astEncoderDeviceParam[emDevNum].stRunningParam.Speed;
+fix32_t fEncoderGetSpeed(emEncoderDevNumTdf emDevNum){
+    return astEncoderDeviceParam[emDevNum].stRunningParam.fSpeed;
 }
 
 void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
 {
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
-    stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
+    stEncoderStaticParamTdf  *pstStatic  = &astEncoderDeviceParam[emDevNum].stStaticParam;
 
-    //    float temp = 0.0;
-
-    /* 计算电机转速 
-       第一步 ：计算ms毫秒内计数变化量
-       第二步 ；计算1min内计数变化量：g_encode.speed * ((1000 / ms) * 60 ，
-       第三步 ：除以编码器旋转一圈的计数次数（倍频倍数 * 编码器分辨率）
-       第四步 ：除以减速比即可得出电机转速
-    */
-    pstRunning->TotalPosition = lEncoderGetEncoder(emDevNum);                               /* 取出编码器当前总位置 */
-    
-    
+    pstRunning->TotalPosition = lEncoderGetEncoder(emDevNum);
     int32_t delta = pstRunning->TotalPosition - pstRunning->LastPosition;
-    
-    /* 计算路程 */
-    if(pstStatic->Wheel_Diameter_mm > 0.0f)
-    {
-        float wheel_circumference = pstStatic->Wheel_Diameter_mm * 3.1415926535f;
-        float distance_per_count = wheel_circumference / (pstStatic->Roto_Ratio * pstStatic->A_Round_Count);
-        pstRunning->Distance_mm += (float)delta * distance_per_count;
-        //pstRunning->LastPosition = pstRunning->TotalPosition;
-    }
-    
-    pstRunning->Speed = (float)                                                             /* 计算编码器计数值对应速度 */
-         delta * 
-        ((1000 / ENCODER_HANDLE_FREQ) * 60.0) / pstStatic->Roto_Ratio / pstStatic->A_Round_Count;
-    
-    pstRunning->LastPosition = pstRunning->TotalPosition;
-    
-//    g_encode.encode_old = g_encode.encode_now;          /* 保存当前编码器的值 */
 
-    /* 一阶低通滤波
-     * 公式为：Y(n)= qX(n) + (1-q)Y(n-1)
-     * 其中X(n)为本次采样值；Y(n-1)为上次滤波输出值；Y(n)为本次滤波输出值，q为滤波系数
-     * q值越小则上一次输出对本次输出影响越大，整体曲线越平稳，但是对于速度变化的响应也会越慢
+    /* 计算路程（定点数）
+     * distance = delta * D * pi / (Roto * Counts * Gear)
      */
-    //g_motor_data.speed = (float)( ((float)0.48 * temp) + (g_motor_data.speed * (float)0.52) );
+    if (pstStatic->fWheelDiameterMm > FIX32_ZERO) {
+        fix32_t fGear = (pstStatic->fGearRatio > FIX32_ZERO) ? pstStatic->fGearRatio : FIX32_ONE;
+        fix32_t fDenom = (fix32_t)((int64_t)((int32_t)pstStatic->Roto_Ratio * (int32_t)pstStatic->A_Round_Count) * 65536);
+        fDenom = fix32_mul(fDenom, fGear);
+        fix32_t fDelta = (fix32_t)((int64_t)delta * 65536);
+        fix32_t fDist  = fix32_mul(fix32_mul(fDelta, pstStatic->fWheelDiameterMm), FIX32_3_14159);
+        fDist = fix32_div(fDist, fDenom);
+        pstRunning->fDistanceMm += fDist;
+    }
 
+    /* 计算速度（定点数）
+     * speed_rpm = delta * (60000 / freq) / Roto / Counts / Gear
+     * 注意：先做除法避免 fix32_from_int 溢出
+     */
+    int32_t lRotoCounts = (int32_t)pstStatic->Roto_Ratio * (int32_t)pstStatic->A_Round_Count;
+    if (lRotoCounts == 0) lRotoCounts = 1;
+    int32_t lSpeedRaw = delta * (60000 / (int32_t)ENCODER_HANDLE_FREQ) / lRotoCounts;
+    pstRunning->fSpeed = (fix32_t)((int64_t)lSpeedRaw * 65536);
+
+    if (pstStatic->fGearRatio > FIX32_ZERO) {
+        pstRunning->fSpeed = fix32_div(pstRunning->fSpeed, pstStatic->fGearRatio);
+    }
+
+    pstRunning->LastPosition = pstRunning->TotalPosition;
 }
 
 /**
@@ -359,17 +350,19 @@ void vEncoder_Handler(emEncoderDevNumTdf emDevNum)
     stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
 
     pstRunning->emCurrentPinState = TI_GPIO_ReadPin(
-        pstStatic->pstDirGpioBase, 
+        pstStatic->pstDirGpioBase,
         pstStatic->usDirGpioPin
     );
-    
-    pstRunning->TotalPosition += 
-    pstRunning->direction_map[pstRunning->emCurrentPinState] 
-    * pstStatic->ucNumberofEdgesToDetect;
 
-    if(!pstRunning->isDoneAInterrupt) pstRunning->isDoneAInterrupt = 1;
-
-    pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR = 0;
+    if (pstStatic->ucNumberofEdgesToDetect == 1) {
+        /* 单边沿模式：中断中直接更新位置并清零 */
+        pstRunning->TotalPosition +=
+            pstRunning->direction_map[pstRunning->emCurrentPinState];
+        pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR = 0;
+    } else {
+        /* 多边沿模式：只标记，不清零，由 lEncoderGetEncoder 处理累积值 */
+        if(!pstRunning->isDoneAInterrupt) pstRunning->isDoneAInterrupt = 1;
+    }
 }
 #else
 
@@ -395,14 +388,14 @@ void vEncoder_Handler(uint16_t GPIO_Pin)
 /**
  * @brief 获取编码器距离
  * @param emDevNum 编码器设备号
- * @return float 编码器距离
+ * @return fix32_t 编码器距离 (Q16.16, 单位: mm)
  */
-float fEncoderGetDistance(emEncoderDevNumTdf emDevNum)
+fix32_t fEncoderGetDistance(emEncoderDevNumTdf emDevNum)
 {
     if (emDevNum >= ENCODER_DEV_NUM) {
-        return 0.0f;
+        return FIX32_ZERO;
     }
-    return astEncoderDeviceParam[emDevNum].stRunningParam.Distance_mm;
+    return astEncoderDeviceParam[emDevNum].stRunningParam.fDistanceMm;
 }
 
 /**
@@ -415,7 +408,7 @@ void vEncoderResetDistance(emEncoderDevNumTdf emDevNum)
         return;
     }
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
-    pstRunning->Distance_mm = 0.0f;
+    pstRunning->fDistanceMm = FIX32_ZERO;
     pstRunning->LastPosition = lEncoderGetEncoder(emDevNum);
 }
 #endif

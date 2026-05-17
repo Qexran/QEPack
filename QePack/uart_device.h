@@ -148,6 +148,9 @@ uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum);
 /* 周期执行 */
 void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum);
 
+/* 回调设置（使能后可在运行时替换回调函数） */
+void vUartSetCallback(emUartDevNumTdf emDevNum, vUartFrameCallback vCallback);
+
 #if (QEPACK_PLATFORM == TI)
     void vUartRxCallBackHandler(emUartDevNumTdf emDevNum);
 #endif
@@ -193,4 +196,66 @@ while(1)
     // 检测是否有接收到的帧数据（通过回调函数处理）
     HAL_Delay(10);
 }
+*/
+
+/*
+ UART配置技巧
+
+  ┌─────────────────────────┬──────┬─────────────────────────────────────────┐
+  │ 参数                     │ 当前值 │ 作用                                    │
+  ├─────────────────────────┼──────┼─────────────────────────────────────────┤
+  │ UART_BUF_MAX_LEN        │ 256  │ 环形接收缓冲区（ISR 写入，主循环读取）   │
+  │ UART_FRAME_MAX_LEN      │ 128  │ 帧数据缓冲区（存放解析后的完整帧数据）   │
+  │ UART_TX_BUF_MAX_LEN     │ 512  │ vUartPrintf 格式化缓冲区（栈替代方案）   │
+  │ UART_TX_QUEUE_MAX_LEN   │ 256  │ DMA 发送队列（仅 DMA 模式生效）          │
+  │ UART_IS_USE_DMA          │ 0    │ 是否启用 DMA                             │
+  └─────────────────────────┴──────┴─────────────────────────────────────────┘
+
+  内存占用（每设备）
+
+  非 DMA 模式 (UART_IS_USE_DMA = 0):
+    RingBuffer      = UART_BUF_MAX_LEN + 6 字节    → 256 + 6 = 262
+    aucTxBuf        = UART_TX_BUF_MAX_LEN           → 512
+    aucFrameDataBuf = UART_FRAME_MAX_LEN             → 128
+    其他字段        ≈ 20 字节
+    ─────────────────────────────────────────────
+    每设备总计      ≈ 922 字节 × 3 设备 ≈ 2.7 KB
+
+  DMA 模式额外:
+    aucTxQueue      = UART_TX_QUEUE_MAX_LEN          → 256
+    aucDmaRxBuf     = UART_BUF_MAX_LEN               → 256
+    其他 DMA 字段   ≈ 7 字节
+    ─────────────────────────────────────────────
+    每设备额外      ≈ 519 字节
+
+  配置建议
+
+  按使用场景调整：
+
+  ┌─────────────────────────┬─────────────┬───────────────┬────────────────┐
+  │          场景           │ BUF_MAX_LEN │ FRAME_MAX_LEN │ TX_BUF_MAX_LEN │
+  ├─────────────────────────┼─────────────┼───────────────┼────────────────┤
+  │ 低速调试（9600-115200） │ 128         │ 64            │ 128            │
+  ├─────────────────────────┼─────────────┼───────────────┼────────────────┤
+  │ 常规通信（115200）      │ 256         │ 128           │ 256            │
+  ├─────────────────────────┼─────────────┼───────────────┼────────────────┤
+  │ 高速/大数据量           │ 512         │ 256           │ 512            │
+  └─────────────────────────┴─────────────┴───────────────┴────────────────┘
+
+  关键原则：
+
+  - UART_BUF_MAX_LEN：必须是 2 的幂（因为环形缓冲区用 % 取模，编译器对 2
+  的幂会优化为位运算）。值要大于一帧数据的最大长度，否则帧还没收完缓冲区就满了
+  - UART_FRAME_MAX_LEN：大于你最大的一帧数据长度即可。帧模式下这是回调函数能读到的最大数据量
+  - UART_TX_BUF_MAX_LEN：决定 vUartPrintf 单次能格式化多长的字符串。不用 vUartPrintf 的话可以缩小到 1
+  - UART_TX_QUEUE_MAX_LEN：仅 DMA 模式生效，非 DMA 模式下设多大都不占 RAM（已被条件编译包裹）
+
+  举例： 如果你只用帧模式收发短帧（< 32 字节），不用 printf，可以这样配：
+
+  #define UART_BUF_MAX_LEN        128     // 够用就行
+  #define UART_FRAME_MAX_LEN      64      // 帧最大 32 字节，留余量
+  #define UART_TX_BUF_MAX_LEN     64      // printf 最多格式化 64 字节
+  #define UART_TX_QUEUE_MAX_LEN   256     // DMA 关闭，此值不占 RAM
+
+  这样每设备 RAM 占用从 ~922 字节降到 ~470 字节。
 */

@@ -495,8 +495,6 @@ static void vUartDispatchCallback(emUartDevNumTdf emDevNum)
 /// @note       建议1ms调用一次，放在1ms定时器ISR中
 void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
 {
-    vUartDispatchCallback(emDevNum);
-
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 
@@ -509,6 +507,8 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
             {
                 uint8_t ucData = ucUartReceiveByte(emDevNum);
                 vUartParseFrame(emDevNum, ucData);
+                // 帧完成立即回调并重置状态机，避免后续字节被误消费
+                vUartDispatchCallback(emDevNum);
             }
         }
         else if(pstStatic->vCallbackFcn)
@@ -522,19 +522,28 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
             if(pstRunning->ulFrameDataCount > 0)
             {
                 pstRunning->ucRxComplete = 1;
+                vUartDispatchCallback(emDevNum);
             }
         }
         // 非帧+轮询模式：数据留在环形缓冲区，用户通过 ucUartRxAvailable + ucUartReceiveByte 读取
     }
 }
 
-/// @brief 检查 UART 接收缓冲区是否有可用数据
-/// @param emDevNum ：设备号
-/// @return 1: 有数据, 0: 无数据
+/// @brief      检查接收缓冲区是否有可用数据
+/// @param      emDevNum ：设备号
+/// @return     1: 有数据, 0: 无数据
 uint8_t ucUartRxAvailable(emUartDevNumTdf emDevNum)
 {
     const stUartDeviceParamTdf *pstDev = c_pstGetUartDeviceParam(emDevNum);
     return pstDev->stRunningParam.stUartTempBuffer.count > 0;
+}
+
+/// @brief      设置 UART 帧回调函数（运行时替换）
+/// @param      emDevNum  ：设备号
+/// @param      vCallback ：新的回调函数指针，传入 NULL 可清除
+void vUartSetCallback(emUartDevNumTdf emDevNum, vUartFrameCallback vCallback)
+{
+    astUartDeviceParam[emDevNum].stStaticParam.vCallbackFcn = vCallback;
 }
 
 /// @brief 更新环形接收缓冲区（由 UART 接收中断调用）
@@ -635,6 +644,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
             for(uint16_t idx = 0; idx < Size; idx++)
             {
                 vUartParseFrame((emUartDevNumTdf)i, pstRunning->aucDmaRxBuf[idx]);
+                // 帧完成立即回调，避免DMA重启后新数据覆盖 aucFrameDataBuf
+                vUartDispatchCallback((emUartDevNumTdf)i);
             }
         }
         else
@@ -645,10 +656,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
             pstRunning->ulFrameDataCount = usCopyLen;
             pstRunning->ulRxCount += Size;
             pstRunning->ucRxComplete = 1;
+            vUartDispatchCallback((emUartDevNumTdf)i);
         }
     }
 
-    // 重新开启DMA接收（写入专用DMA缓冲区，不影响环形缓冲区中的数据）
+    // 回调处理完毕后再开启DMA接收，防止新数据覆盖正在读取的缓冲区
     HAL_UARTEx_ReceiveToIdle_DMA(
         pstStatic->pstUartHandle,
         pstRunning->aucDmaRxBuf,

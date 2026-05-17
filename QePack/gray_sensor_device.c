@@ -10,9 +10,6 @@
 
 stGraySensorDeviceParamTdf astGraySensorDeviceParam[GRAY_SENSOR_DEV_NUM];
 
-/* 编码器目标值（停止检测用）- 兼容原有接口 */
-static int32_t slEncoderTarget[GRAY_SENSOR_DEV_NUM];
-
 /**
  * @brief 获取灰度传感器设备参数
  * @param emDevNum 设备号
@@ -48,20 +45,43 @@ void vGraySensorDeviceInit(stGraySensorStaticParamTdf *pstInit, emGraySensorDevN
     stGraySensorRunningParamTdf *pstRunning = &astGraySensorDeviceParam[emDevNum].stRunningParam;
     pstRunning->emStopState = emGrayStopNormal;
     pstRunning->ucEnableSensor = 1;
-    slEncoderTarget[emDevNum] = 0;
 }
 
-/**
- * @brief 异常状态计数器递增（内部使用）
- * @param emDevNum 设备号
- */
-static void vGraySensorAddWorse(emGraySensorDevNumTdf emDevNum)
-{
-    stGraySensorRunningParamTdf *pstRunning = &astGraySensorDeviceParam[emDevNum].stRunningParam;
-    if (pstRunning->ulStatusWorse <= 20) {
-        pstRunning->ulStatusWorse++;
-    }
-}
+/* 灰度传感器状态到偏移量的查找表（-128 表示使用上一次值） */
+static const int8_t scGraySensorOffsetTable[256] = {
+    -128,   7,   5,   6,   3, -128,   4, -128,  /* 0x00-0x07 */
+       1, -128, -128, -128,   2, -128, -128, -128,  /* 0x08-0x0F */
+      -1, -128, -128, -128, -128, -128, -128, -128,  /* 0x10-0x17 */
+       0, -128, -128, -128, -128, -128, -128, -128,  /* 0x18-0x1F */
+      -3, -128, -128, -128, -128, -128, -128, -128,  /* 0x20-0x27 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x28-0x2F */
+      -2, -128, -128, -128, -128, -128, -128, -128,  /* 0x30-0x37 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x38-0x3F */
+      -5, -128, -128, -128, -128, -128, -128, -128,  /* 0x40-0x47 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x48-0x4F */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x50-0x57 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x58-0x5F */
+      -4, -128, -128, -128, -128, -128, -128, -128,  /* 0x60-0x67 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x68-0x6F */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x70-0x77 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x78-0x7F */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x80-0x87 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x88-0x8F */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x90-0x97 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0x98-0x9F */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xA0-0xA7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xA8-0xAF */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xB0-0xB7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xB8-0xBF */
+      -6, -128, -128, -128, -128, -128, -128, -128,  /* 0xC0-0xC7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xC8-0xCF */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xD0-0xD7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xD8-0xDF */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xE0-0xE7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xE8-0xEF */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xF0-0xF7 */
+    -128, -128, -128, -128, -128, -128, -128, -128,  /* 0xF8-0xFF */
+};
 
 /**
  * @brief 计算历史数据的均值（均值滤波核心）
@@ -131,38 +151,21 @@ void vGraySensorCheck(emGraySensorDevNumTdf emDevNum)
     if (pstRunning->ucEnableSensor == 0) return;
     
     int16_t sTempStatus;
-    pstRunning->usGrayState = usGraySensorGetState(emDevNum);
-    
-    switch (pstRunning->usGrayState) {
-        case 0x01: sTempStatus = 7;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x03: sTempStatus = 6;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x02: sTempStatus = 5;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x06: sTempStatus = 4;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x04: sTempStatus = 3;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x0C: sTempStatus = 2;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x08: sTempStatus = 1;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x18: sTempStatus = 0;    pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x10: sTempStatus = -1;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x30: sTempStatus = -2;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x20: sTempStatus = -3;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x60: sTempStatus = -4;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x40: sTempStatus = -5;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0xC0: sTempStatus = -6;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x80: sTempStatus = -7;   pstRunning->sLastGrayStatus = sTempStatus; break;
-        case 0x00:
-            sTempStatus = pstRunning->sLastGrayStatus;
-            vGraySensorAddWorse(emDevNum);
-            break;
-        default:
-            sTempStatus = pstRunning->sLastGrayStatus;
-            vGraySensorAddWorse(emDevNum);
-            break;
+    uint16_t usState = usGraySensorGetState(emDevNum);
+    pstRunning->usGrayState = usState;
+
+    int8_t cOffset = scGraySensorOffsetTable[usState & 0xFF];
+    if (cOffset != -128) {
+        sTempStatus = cOffset;
+        pstRunning->sLastGrayStatus = cOffset;
+    } else {
+        sTempStatus = pstRunning->sLastGrayStatus;
+        if (pstRunning->ulStatusWorse <= 20) {
+            pstRunning->ulStatusWorse++;
+        }
     }
-    
-    if (pstRunning->usGrayState != 0x00 && 
-        (pstRunning->usGrayState & 0xFF) != 0xFF && 
-        pstRunning->usGrayState != 0x0F && 
-        pstRunning->usGrayState != 0xF0) {
+
+    if (usState != 0x00 && usState != 0xFF && usState != 0x0F && usState != 0xF0) {
         pstRunning->ulStatusWorse >>= 1;
     }
     
@@ -191,18 +194,13 @@ void vGraySensorCheckStop(emGraySensorDevNumTdf emDevNum)
     stGraySensorRunningParamTdf *pstRunning = &astGraySensorDeviceParam[emDevNum].stRunningParam;
     
     if (!pstStatic->ucEnableStopLineDetect) return;
-    
+
+    uint16_t usState = pstRunning->usGrayState;
     uint8_t ucCurr[3];
-    #if (QEPACK_PLATFORM == TI)
-        ucCurr[0] = (DL_GPIO_readPins(pstStatic->pstGpioPort[5], pstStatic->ulGpioPin[5]) ? 1 : 0);
-        ucCurr[1] = (DL_GPIO_readPins(pstStatic->pstGpioPort[6], pstStatic->ulGpioPin[6]) ? 1 : 0);
-        ucCurr[2] = (DL_GPIO_readPins(pstStatic->pstGpioPort[7], pstStatic->ulGpioPin[7]) ? 1 : 0);
-    #else
-        ucCurr[0] = (HAL_GPIO_ReadPin(pstStatic->pstGpioPort[5], pstStatic->usGpioPin[5]) ? 1 : 0);
-        ucCurr[1] = (HAL_GPIO_ReadPin(pstStatic->pstGpioPort[6], pstStatic->usGpioPin[6]) ? 1 : 0);
-        ucCurr[2] = (HAL_GPIO_ReadPin(pstStatic->pstGpioPort[7], pstStatic->usGpioPin[7]) ? 1 : 0);
-    #endif
-    
+    ucCurr[0] = (usState >> 5) & 1;
+    ucCurr[1] = (usState >> 6) & 1;
+    ucCurr[2] = (usState >> 7) & 1;
+
     for (uint8_t i = 0; i < 3; i++) {
         if (ucCurr[i]) {
             pstRunning->stTrack[i].ucTriggered = 1;
@@ -215,14 +213,10 @@ void vGraySensorCheckStop(emGraySensorDevNumTdf emDevNum)
             }
         }
     }
-    
-    if (pstRunning->stTrack[0].ucTriggered && 
-        pstRunning->stTrack[1].ucTriggered && 
+
+    if (pstRunning->stTrack[0].ucTriggered &&
+        pstRunning->stTrack[1].ucTriggered &&
         pstRunning->stTrack[2].ucTriggered) {
-        pstRunning->emStopState = emGrayStopLeftCorner;
-    }
-    
-    if (ucCurr[0] && ucCurr[1] && ucCurr[2]) {
         pstRunning->emStopState = emGrayStopLeftCorner;
     }
 }
@@ -280,28 +274,6 @@ void vGraySensorSetStopState(emGraySensorDevNumTdf emDevNum, emGrayStopStateTdf 
 {
     if (emDevNum >= GRAY_SENSOR_DEV_NUM) return;
     astGraySensorDeviceParam[emDevNum].stRunningParam.emStopState = emStopState;
-}
-
-/**
- * @brief 设置停止检测冻结阈值
- * @param emDevNum 设备号
- * @param usTime 冻结时间
- */
-void vGraySensorSetFreezeStopThreshold(emGraySensorDevNumTdf emDevNum, uint16_t usTime)
-{
-    (void)emDevNum;
-    (void)usTime;
-}
-
-/**
- * @brief 设置编码器目标值（停止检测用）
- * @param emDevNum 设备号
- * @param lEncoderTarget 编码器目标值
- */
-void vGraySensorSetEncoderTarget(emGraySensorDevNumTdf emDevNum, int32_t lEncoderTarget)
-{
-    if (emDevNum >= GRAY_SENSOR_DEV_NUM) return;
-    slEncoderTarget[emDevNum] = lEncoderTarget;
 }
 
 #endif
