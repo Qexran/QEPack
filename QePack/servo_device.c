@@ -66,8 +66,10 @@ static float fServoValueToPulse(emServoDevNumTdf emDevNum, float fValue)
     // 180°角度型舵机：角度 -> 脉冲宽度（线性映射）
     if(pstStatic->emType == emServoType_Angle)
     {
-        return pstStatic->fPulseMin + (fValue - pstStatic->fValueMin) * 
-               (pstStatic->fPulseMax - pstStatic->fPulseMin) / (pstStatic->fValueMax - pstStatic->fValueMin);
+        float fRange = pstStatic->fValueMax - pstStatic->fValueMin;
+        if (fRange < 0.01f) return pstStatic->fPulseMid;
+        return pstStatic->fPulseMin + (fValue - pstStatic->fValueMin) *
+               (pstStatic->fPulseMax - pstStatic->fPulseMin) / fRange;
     }
     // 360°连续旋转型舵机：速度 -> 脉冲宽度
     else if(pstStatic->emType == emServoType_360)
@@ -83,7 +85,7 @@ static float fServoValueToPulse(emServoDevNumTdf emDevNum, float fValue)
         // 反转（-100~0）：中位脉冲 -> 最小脉冲
         else
         {
-            return pstStatic->fPulseMid - (fabs(fValue) / fabs(SERVO_360_SPEED_MIN)) * 
+            return pstStatic->fPulseMid - (fabs(fValue) / 100.0f) *
                    (pstStatic->fPulseMid - pstStatic->fPulseMin);
         }
     }
@@ -101,14 +103,11 @@ static void vServoUpdatePwm(emServoDevNumTdf emDevNum, float fPulseUs)
     stServoStaticParamTdf *pstStatic = &astServoDeviceParam[emDevNum].stStaticParam;
     
     #if (QEPACK_PLATFORM == TI )
-        /* 待写 */
+        if (pstStatic->stTimer == NULL || pstStatic->stTimer->clk_freq == 0) return;
         uint32_t Prescaler = CPUCLK_FREQ / pstStatic->stTimer->clk_freq;
-        // 计算ARR值（定时器自动重装值）
-        uint32_t ulArr = (CPUCLK_FREQ / (pstStatic->fPwmFreq * (Prescaler))) - 1;
-        // 计算CCR值（比较值）：CCR = (脉冲宽度/1秒) * PWM频率 * ARR
+        uint32_t ulArr = (CPUCLK_FREQ / (pstStatic->fPwmFreq * Prescaler)) - 1;
         uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * ulArr);
-        
-        // 设置PWM比较值
+
         DL_Timer_setCaptureCompareValue(pstStatic->stTimer->timer_inst, ulCcr, pstStatic->emChannel);
     #else
         // 计算ARR值（定时器自动重装值）
@@ -349,6 +348,7 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
 /// @param      newemMode ：新的模式
 void vServoSetMode(emServoDevNumTdf emDevNum, emServoModeTdf newemMode)
 {
+    if(emDevNum >= SERVO_DEV_NUM) return;
     astServoDeviceParam[emDevNum].stRunningParam.emMode = newemMode;
 }
 

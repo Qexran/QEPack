@@ -18,6 +18,7 @@ stTimerDeviceParamTdf astTimerDeviceParam[TIMER_CONTROLLER_NUM];
  */
 const stTimerDeviceParamTdf *c_pstGetTimerDeviceParam(emTimerDevNumTdf emDevNum)
 {
+    if (emDevNum >= TIMER_CONTROLLER_NUM) return NULL;
     return &astTimerDeviceParam[emDevNum];
 }
 

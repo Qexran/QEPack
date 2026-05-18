@@ -51,13 +51,17 @@ static uint8_t u8StepCheckTimeout(stStepItemTdf *pstItem, uint32_t startTick)
 
 /**
  * @brief 静态函数:执行步骤切换
+ * @note  在关中断下执行，防止 ISR 中 vStepPeriodExecute 读到不完整的 curStep/curStepIndex/stepStartTick
  */
 static void vStepSwitch(emSmStepDevTdf emDevNum, uint16_t nextStep)
 {
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
+    uint32_t ulPrimask = __get_PRIMASK();
+    __disable_irq();
     pstDev->curStep = nextStep;
     pstDev->curStepIndex = u8StepFindIndex(emDevNum, nextStep);
     pstDev->stepStartTick = HAL_GetTick();
+    __set_PRIMASK(ulPrimask);
 }
 
 /**
@@ -87,7 +91,7 @@ static uint8_t u8StepHandleError(emSmStepDevTdf emDevNum, stStepItemTdf *pstCurS
  * @param ... 不定长参数:[步骤参数...]+0
  * @param 单步骤参数:stepId(ushort)+pfExec(pfStepExecCb)+timeoutMs(ulong)+ruleNum(uchar)+[ret,nextStep...](ushort*N)+...
  */
-void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, int endStep, ...)
+void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, unsigned int endStep, ...)
 {
     if (emDevNum >= STEP_M_NUM || stepTotal > STEP_M_MAX_STEP_NUM) return;
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
@@ -98,7 +102,7 @@ void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, int 
     memset(pstDev, 0, sizeof(stStepDevParamTdf));
     pstDev->stepTotal = stepTotal;
     pstDev->isCycle = isCycle;
-    pstDev->endStep = endStep;
+    pstDev->endStep = (uint16_t)endStep;
     pstDev->mState = emStepMStateIdle;
 
     // 2. 解析可变参数,逐个加载步骤

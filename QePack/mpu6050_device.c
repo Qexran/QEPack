@@ -128,7 +128,7 @@ int mspm0_i2c_write(unsigned char slave_addr, unsigned char reg_addr, unsigned c
 
         unsigned long cur;
         mspm0_get_clock_ms(&cur);
-        if (cur >= (start + I2C_TIMEOUT_MS)) {
+        if ((cur - start) >= I2C_TIMEOUT_MS) {
             stMpu6050StaticParamTdf *pstSt = &g_astMpu6050DeviceParam[g_emActiveDevNum].stStaticParam;
             vI2cSdaUnlock(pstI2c, pstSt->stI2c.pstSclGpioPort, pstSt->stI2c.usSclPin,
                           pstSt->stI2c.pstSdaGpioPort, pstSt->stI2c.usSdaPin,
@@ -167,7 +167,7 @@ int mspm0_i2c_read(unsigned char slave_addr, unsigned char reg_addr, unsigned ch
         }
         unsigned long cur;
         mspm0_get_clock_ms(&cur);
-        if (cur >= (start + I2C_TIMEOUT_MS)) {
+        if ((cur - start) >= I2C_TIMEOUT_MS) {
             stMpu6050StaticParamTdf *pstSt = &g_astMpu6050DeviceParam[g_emActiveDevNum].stStaticParam;
             vI2cSdaUnlock(pstI2c, pstSt->stI2c.pstSclGpioPort, pstSt->stI2c.usSclPin,
                           pstSt->stI2c.pstSdaGpioPort, pstSt->stI2c.usSdaPin,
@@ -271,6 +271,7 @@ QE_StatusTypeDef emMpu6050DeviceInit(emMpu6050DevNumTdf emDevNum, const stMpu605
 /**
  * @brief  读取 DMP FIFO 并更新姿态数据
  * @note   在 MPU6050 INT 引脚 GPIO 中断回调中调用
+ *         ISR 仅缓存原始数据，浮点/三角运算延迟到主循环 getter 中执行
  */
 QE_StatusTypeDef emMpu6050ReadDmp(emMpu6050DevNumTdf emDevNum)
 {
@@ -279,6 +280,8 @@ QE_StatusTypeDef emMpu6050ReadDmp(emMpu6050DevNumTdf emDevNum)
     stMpu6050RunningParamTdf *pstRun = &g_astMpu6050DeviceParam[emDevNum].stRunningParam;
     if (!pstRun->ucDmpReady) return QE_ERROR;
 
+    /* 保存并设置当前活跃设备，ISR 退出前恢复，防止破坏主循环正在进行的 I2C 事务 */
+    emMpu6050DevNumTdf emPrevDev = g_emActiveDevNum;
     g_emActiveDevNum = emDevNum;
 
     short sGyro[3], sAccel[3], sSensors;
@@ -286,8 +289,11 @@ QE_StatusTypeDef emMpu6050ReadDmp(emMpu6050DevNumTdf emDevNum)
     unsigned long ulTimestamp;
     unsigned char ucMore;
 
-    if (dmp_read_fifo(sGyro, sAccel, lQuat, &ulTimestamp, &sSensors, &ucMore) != 0)
-        return QE_ERROR;
+    int result = dmp_read_fifo(sGyro, sAccel, lQuat, &ulTimestamp, &sSensors, &ucMore);
+
+    g_emActiveDevNum = emPrevDev;
+
+    if (result != 0) return QE_ERROR;
 
     /* 保存原始值 */
     pstRun->stGyro.sX  = sGyro[0];
@@ -297,11 +303,32 @@ QE_StatusTypeDef emMpu6050ReadDmp(emMpu6050DevNumTdf emDevNum)
     pstRun->stAccel.sY = sAccel[1];
     pstRun->stAccel.sZ = sAccel[2];
 
-    /* 四元数归一化 -> 欧拉角 */
-    float fQ0 = lQuat[0] / Q30;
-    float fQ1 = lQuat[1] / Q30;
-    float fQ2 = lQuat[2] / Q30;
-    float fQ3 = lQuat[3] / Q30;
+    /* 缓存原始四元数（Q30 定点），浮点转换和欧拉角计算延迟到主循环 */
+    pstRun->alQuatRaw[0] = lQuat[0];
+    pstRun->alQuatRaw[1] = lQuat[1];
+    pstRun->alQuatRaw[2] = lQuat[2];
+    pstRun->alQuatRaw[3] = lQuat[3];
+    pstRun->ucDataUpdated = 1;
+    pstRun->ucAttitudeDirty = 1;
+
+    return QE_OK;
+}
+
+/* ==================== 数据读取 API ==================== */
+
+/**
+ * @brief  从缓存的原始四元数计算欧拉角（主循环调用）
+ * @note   包含 asinf/atan2f 等软浮点三角运算，绝不可在 ISR 中调用
+ */
+static void vMpu6050ComputeAttitude(emMpu6050DevNumTdf emDevNum)
+{
+    stMpu6050RunningParamTdf *pstRun = &g_astMpu6050DeviceParam[emDevNum].stRunningParam;
+    if (!pstRun->ucAttitudeDirty) return;
+
+    float fQ0 = pstRun->alQuatRaw[0] / Q30;
+    float fQ1 = pstRun->alQuatRaw[1] / Q30;
+    float fQ2 = pstRun->alQuatRaw[2] / Q30;
+    float fQ3 = pstRun->alQuatRaw[3] / Q30;
 
     pstRun->stQuat.fQ0 = fQ0;
     pstRun->stQuat.fQ1 = fQ1;
@@ -311,34 +338,34 @@ QE_StatusTypeDef emMpu6050ReadDmp(emMpu6050DevNumTdf emDevNum)
     pstRun->stAttitude.fPitch = asinf(-2.0f * fQ1 * fQ3 + 2.0f * fQ0 * fQ2) * 57.3f;
     pstRun->stAttitude.fRoll  = atan2f(2.0f * fQ2 * fQ3 + 2.0f * fQ0 * fQ1, -2.0f * fQ1 * fQ1 - 2.0f * fQ2 * fQ2 + 1.0f) * 57.3f;
     pstRun->stAttitude.fYaw   = atan2f(2.0f * (fQ1 * fQ2 + fQ0 * fQ3), fQ0 * fQ0 + fQ1 * fQ1 - fQ2 * fQ2 - fQ3 * fQ3) * 57.3f;
-    pstRun->ucDataUpdated = 1;
-
-    return QE_OK;
+    pstRun->ucAttitudeDirty = 0;
 }
-
-/* ==================== 数据读取 API ==================== */
 
 void vMpu6050GetAttitude(emMpu6050DevNumTdf emDevNum, stMpu6050AttitudeTdf *pstAttitude)
 {
     if (emDevNum >= MPU6050_DEV_NUM || pstAttitude == NULL) return;
+    vMpu6050ComputeAttitude(emDevNum);
     *pstAttitude = g_astMpu6050DeviceParam[emDevNum].stRunningParam.stAttitude;
 }
 
 float fMpu6050GetPitch(emMpu6050DevNumTdf emDevNum)
 {
     if (emDevNum >= MPU6050_DEV_NUM) return 0.0f;
+    vMpu6050ComputeAttitude(emDevNum);
     return g_astMpu6050DeviceParam[emDevNum].stRunningParam.stAttitude.fPitch;
 }
 
 float fMpu6050GetRoll(emMpu6050DevNumTdf emDevNum)
 {
     if (emDevNum >= MPU6050_DEV_NUM) return 0.0f;
+    vMpu6050ComputeAttitude(emDevNum);
     return g_astMpu6050DeviceParam[emDevNum].stRunningParam.stAttitude.fRoll;
 }
 
 float fMpu6050GetYaw(emMpu6050DevNumTdf emDevNum)
 {
     if (emDevNum >= MPU6050_DEV_NUM) return 0.0f;
+    vMpu6050ComputeAttitude(emDevNum);
     return g_astMpu6050DeviceParam[emDevNum].stRunningParam.stAttitude.fYaw;
 }
 

@@ -8,17 +8,23 @@
 #include "linear_ccd_device.h"
 #if LINEAR_CCD_IS_ENABLE
 
+#if (QEPACK_PLATFORM == TI)
+#include "ti_msp_dl_config.h"
+#endif
+
 
 stLinerCcdDeviceParamTdf astLinerCcdDeviceParam[LINER_CCD_DEV_NUM];
 
 /**
- * @brief 土制Delay
+ * @brief 微秒延时（平台适配）
  */
-static void Dly_us(uint8_t us){
-   int i, j; 
-   for(j=0;j<us;j++){
-       for(i=0;i<10;i++); 
-   }
+static void Dly_us(uint32_t us)
+{
+#if (QEPACK_PLATFORM == TI)
+    DL_Common_delayCycles(us * (CPUCLK_FREQ / 1000000UL));
+#else
+    Delay_us(us);
+#endif
 }
 
 /**
@@ -147,8 +153,7 @@ void vLinerCcdDeviceInit(stLinerCcdStaticParamTdf *pstInit, emLinerCcdDevNumTdf 
            sizeof(stLinerCcdRunningParamTdf));
     
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
-    
-    // 64 ?!
+
     pstRunning->sCenterLine = 0;
     pstRunning->sLastCenterLine = 0;
 
@@ -270,7 +275,7 @@ QE_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
     }
     
     //寻找右边跳变沿，连续三个黑像素后连续三个白像素判断左边跳变沿
-    for (int8_t j = ucEnd; j > ucStart + 5; j--) {
+    for (int16_t j = ucEnd; j > (int16_t)ucStart + 5; j--) {
         if (pstRunning->ausPixelData[j] < usThreshold &&
             pstRunning->ausPixelData[j + 1] < usThreshold &&
             pstRunning->ausPixelData[j + 2] < usThreshold &&
@@ -359,12 +364,12 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
         SciBuf[3] = 0;
         SciBuf[4] = 0;
         SciBuf[5] = 0; 
-        for(uint8_t i=0;i<128;i++)
-			SciBuf[6+i] = pstRunning->ausPixelData[i];
-        
+        for (uint8_t i = 0; i < LINER_CCD_PIXEL_COUNT; i++)
+            SciBuf[6 + i] = pstRunning->ausPixelData[i] & 0xFF;
+
         vUartPrintf(UART_DEVICE_0, "*LD");
 
-        for (uint8_t i = 2; i < 134; i++) {
+        for (uint8_t i = 2; i < 6 + LINER_CCD_PIXEL_COUNT; i++) {
             vUartSendByte(UART_DEVICE_0, ucBinToHexHigh(SciBuf[i]));
             vUartSendByte(UART_DEVICE_0, ucBinToHexLow(SciBuf[i]));
             // __BKPT();

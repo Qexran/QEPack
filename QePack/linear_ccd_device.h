@@ -6,16 +6,16 @@
  * @brief   线性CCD设备驱动模块，实现线性CCD的数据采集、阈值处理和中线检测功能。
  */
  
-#include "project_config.h"
-#if LINEAR_CCD_IS_ENABLE
-
 #ifndef _LINER_CCD_DEVICE_H_
 #define _LINER_CCD_DEVICE_H_
+
+#include "project_config.h"
+#if LINEAR_CCD_IS_ENABLE
 
 #include "string.h"
 #include "delay.h"
 #include "arithmetic.h"
-#include <stdlib.h>
+#include "stdlib.h"
 
 #include "adc_device.h"
 
@@ -69,7 +69,7 @@ typedef struct {
 
 /** @brief 线性CCD运行参数定义 */
 typedef struct {
-    uint16_t ausPixelData[128];         // 像素数据缓存
+    uint16_t ausPixelData[LINER_CCD_PIXEL_COUNT]; // 像素数据缓存
     volatile uint16_t adcValue;         // 当前存储的adc值
 
     uint16_t usMaxValue;                // 当前最大值

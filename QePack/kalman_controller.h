@@ -1,12 +1,11 @@
 /**
-  * @file       ultrasonic_device.h
+  * @file       kalman_controller.h
   * @author     Qe_xr
   * @version    V1.0.1
   * @date       2026/1/20
-  * @brief      超声波测量驱动，基于 STM32 HAL 库
-  * 
+  * @brief      一阶卡尔曼滤波器
   */
-  
+
 #include "project_config.h"
 
 #ifndef _KALMAN_CONTROLLER_H_

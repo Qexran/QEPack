@@ -32,7 +32,7 @@ const stLedDeviceParamTdf *c_pstGetLedDeviceParam(emLedDevNumTdf emDevNum)
  */
 void vLedDeviceRunningParamInit(stLedRunningParamTdf *pstInit, emLedDevNumTdf emDevNum)
 {
-    memcpy(&astLedDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stLedRunningParamTdf) / sizeof(uint8_t));
+    memcpy(&astLedDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stLedRunningParamTdf));
 }
 
 /**
@@ -50,12 +50,11 @@ void vLedDeviceRunningParamInit(stLedRunningParamTdf *pstInit, emLedDevNumTdf em
  */
 void vLedUpdatePinLevel(emLedDevNumTdf emDevNum)
 {
+    if(emDevNum >= LED_DEV_NUM) return;
+
     uint8_t ucOutput;
-    
-    // 1. 根据真值表，计算输出引脚电平
     ucOutput = !(astLedDeviceParam[emDevNum].stStaticParam.emOnLevel ^ astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus);
-    
-    // 2. 更新 LED 输出引脚电平
+
     #if (QEPACK_PLATFORM == TI)
         TI_GPIO_WritePin(astLedDeviceParam[emDevNum].stStaticParam.pstGpioPort, astLedDeviceParam[emDevNum].stStaticParam.usGpioPin, (GPIO_PinState)ucOutput);
     #else
@@ -72,38 +71,22 @@ void vLedUpdatePinLevel(emLedDevNumTdf emDevNum)
  */
 void vLedOn(emLedDevNumTdf emDevNum)
 {
-    // 1. 设置当前状态
+    if(emDevNum >= LED_DEV_NUM) return;
     astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus = emLedStatus_On;
-    
-    // 2. 根据当前状态更新输出引脚电平
     vLedUpdatePinLevel(emDevNum);
 }
 
-/**
- * @brief       LED 熄灭
- * @param       emDevNum   ：设备号
- * @note
- */
 void vLedOff(emLedDevNumTdf emDevNum)
 {
-    // 1. 设置当前状态
+    if(emDevNum >= LED_DEV_NUM) return;
     astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus = emLedStatus_Off;
-    
-    // 2. 根据当前状态更新输出引脚电平
     vLedUpdatePinLevel(emDevNum);
 }
 
-/**
- * @brief       LED 翻转
- * @param       emDevNum   ：设备号
- * @note
- */
 void vLedToggle(emLedDevNumTdf emDevNum)
 {
-    // 1. 设置当前状态
-    astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus = (emLedStatusTdf)!astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus;
-    
-    // 2. 根据当前状态更新输出引脚电平
+    if(emDevNum >= LED_DEV_NUM) return;
+    astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus = (emLedStatusTdf)(astLedDeviceParam[emDevNum].stRunningParam.emCurrentStatus ^ 1);
     vLedUpdatePinLevel(emDevNum);
 }
 
@@ -160,34 +143,31 @@ void vLedDeviceBilnkExecute(emLedDevNumTdf emDevNum)
  */
 void vLedDeviceBreathExecute(emLedDevNumTdf emDevNum)
 {
-    uint32_t ulBreathCountMax;          // 呼吸计数最大值
-    uint32_t ulBlinkPeriod;             // 闪烁周期
-    static uint32_t s_ulBreathCount;    // 当前呼吸计数值
-    
-    // 1. LED 执行周期闪烁
+    if(emDevNum >= LED_DEV_NUM) return;
+
+    stLedRunningParamTdf *pstRunning = &astLedDeviceParam[emDevNum].stRunningParam;
+    uint32_t ulBreathCountMax;
+    uint32_t ulBlinkPeriod;
+
     vLedDeviceBilnkExecute(emDevNum);
-    
-    // 2. 计算初始参数
-    // 2.1. 计算 闪烁周期，闪烁周期 = ON 持续时间（计数阈值） +  OFF 持续时间（计数阈值）
-    ulBlinkPeriod = astLedDeviceParam[emDevNum].stRunningParam.ulOnCountThreshold + astLedDeviceParam[emDevNum].stRunningParam.ulOffCountThreshold;
-    
-    // 2.2. 计算呼吸灯周期内最大计数，最大计数 = 呼吸周期 / PWM 周期
-    ulBreathCountMax = astLedDeviceParam[emDevNum].stRunningParam.ulBreathPeriod / ulBlinkPeriod;
-    
-    // 3. 每次 闪烁周期开始时，重新计算【ON 持续时间（计数阈值）】和【OFF 持续时间（计数阈值）】
-    if(astLedDeviceParam[emDevNum].stRunningParam.ulCurrentCount == 0)
+
+    ulBlinkPeriod = pstRunning->ulOnCountThreshold + pstRunning->ulOffCountThreshold;
+    if (ulBlinkPeriod == 0) return;
+
+    ulBreathCountMax = pstRunning->ulBreathPeriod / ulBlinkPeriod;
+    if (ulBreathCountMax == 0) return;
+
+    if(pstRunning->ulCurrentCount == 0)
     {
-        // 3.1. ON 持续时间（计数阈值） = 闪烁周期 / [sin(s_ulCount) * sin(s_ulCount)]
-        astLedDeviceParam[emDevNum].stRunningParam.ulOnCountThreshold = ulBlinkPeriod * sin(PI * s_ulBreathCount / ulBreathCountMax) * sin(PI * s_ulBreathCount / ulBreathCountMax);
-        
-        // 3.2. OFF 持续时间（计数阈值） = 最大计数 - ON平持续时间（计数阈值）
-        astLedDeviceParam[emDevNum].stRunningParam.ulOffCountThreshold = ulBlinkPeriod - astLedDeviceParam[emDevNum].stRunningParam.ulOnCountThreshold;
-        
-        // 3.3. 计数器超出最大值，则清零
-        s_ulBreathCount++;
-        if(s_ulBreathCount >= ulBreathCountMax)
+        float fPhase = PI * pstRunning->ulBreathCount / (float)ulBreathCountMax;
+        float fSinVal = sin(fPhase);
+        pstRunning->ulOnCountThreshold = ulBlinkPeriod * fSinVal * fSinVal;
+        pstRunning->ulOffCountThreshold = ulBlinkPeriod - pstRunning->ulOnCountThreshold;
+
+        pstRunning->ulBreathCount++;
+        if(pstRunning->ulBreathCount >= ulBreathCountMax)
         {
-            s_ulBreathCount = 0;
+            pstRunning->ulBreathCount = 0;
         }
     }
 }
@@ -229,7 +209,7 @@ void vLedDevicePeriodExecute(emLedDevNumTdf emDevNum)
 void vLedDeviceInit(stLedStaticParamTdf *pstInit, emLedDevNumTdf emDevNum)
 {
     // 1. 初始化静态参数
-    memcpy(&astLedDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stLedStaticParamTdf) / sizeof(uint8_t));
+    memcpy(&astLedDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stLedStaticParamTdf));
 }
 
 #endif

@@ -2,9 +2,12 @@
 #define __DELAY_H
 
 #include <stdint.h>
+#include "project_config.h"
 
+#if (QEPACK_PLATFORM == ST)
 void Delay_us(uint32_t us);
 void Delay_ms(uint32_t ms);
 void Delay_s(uint32_t s);
+#endif
 
 #endif

@@ -72,7 +72,8 @@ typedef struct {
     uint16_t usGrayState;                 // 当前灰度传感器状态(0x00-0xFF)
     int16_t sGrayStatus;                  // 滤波后偏移量
     int16_t sLastGrayStatus;              // 上一次偏移量
-    int16_t *psStatusBackup;              // 灰度状态历史记录缓冲区
+#define GRAY_SENSOR_BACKUP_MAX_LEN 32
+    int16_t asStatusBackup[GRAY_SENSOR_BACKUP_MAX_LEN];  // 灰度状态历史记录缓冲区
     uint8_t ucBackupIdx;                  // 环形缓冲区索引
     uint32_t ulStatusWorse;               // 异常状态计数器
     uint8_t ucEnableSensor;               // 传感器使能标志

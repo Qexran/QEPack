@@ -170,6 +170,20 @@ typedef enum
 #define ATK_MS901M_EINVAL   2                       /* 错误函数参数 */
 #define ATK_MS901M_ETIMEOUT 3                       /* 超时错误 */
 
+/* ATK-MS901M 设备参数（用户通过 c_pstGetAtkMs901mDeviceParam 只读访问） */
+typedef struct
+{
+    atk_ms901m_attitude_data_t      stAttitude;
+    atk_ms901m_quaternion_data_t    stQuaternion;
+    atk_ms901m_gyro_data_t          stGyro;
+    atk_ms901m_accelerometer_data_t stAccel;
+    atk_ms901m_magnetometer_data_t  stMag;
+    atk_ms901m_barometer_data_t     stBaro;
+    atk_ms901m_port_data_t          stPort;
+} stAtkMs901mDeviceParamTdf;
+
+const stAtkMs901mDeviceParamTdf *c_pstGetAtkMs901mDeviceParam(emAtkMs901mDevNumTdf emDevNum);
+
 /* ======================== 阻塞轮询 API（兼容模式） ======================== */
 /* 调用后阻塞等待，直到收到指定帧或超时。适用于偶尔查询的场景。     */
 /* 注意：阻塞期间会持续轮询 UART 环形缓冲区，不可在中断中调用。   */
@@ -258,3 +272,40 @@ uint8_t atk_ms901m_read_port(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_port_data
 #endif
 
 #endif
+
+/*
+    usage:
+    
+    stUartStaticParamTdf stUartEmmInit = {
+        .pstUartHandle = &TI_GET_UART_STRUCTURE(UART_ATK),
+        .emFrameEn = emUartFrameOff,
+        .ulBaudRate = 115200,
+        .vCallbackFcn = vUartEmmCallback,             // 回调由 atk_ms901m_init_default 注册
+    };
+
+    vUartDeviceInit(&stUartEmmInit, UART_DEVICE_1);
+
+    atk_ms901m_init_default(UART_DEVICE_1);
+    
+    // uint8_t ret = atk_ms901m_init(UART_DEVICE_1);
+    // if (ret != ATK_MS901M_EOK) while(1);
+
+    // 流式传输
+    atk_ms901m_start_streaming(ATK_MS901M0, UART_DEVICE_1);
+
+    {
+        const stAtkMs901mDeviceParamTdf *pstDev = c_pstGetAtkMs901mDeviceParam(ATK_MS901M0);
+        if (pstDev != NULL) {
+            vOledPrintf(OLED0, 0, 0, OLED_8X16,  "Roll:%.2f ", pstDev->stAttitude.roll);
+            vOledPrintf(OLED0, 0, 16, OLED_8X16, "Pitch:%.2f", pstDev->stAttitude.pitch);
+            vOledPrintf(OLED0, 0, 32, OLED_8X16, "Yaw:%.2f", pstDev->stAttitude.yaw);
+
+            vUartPrintf(UART_DEVICE_0,
+            "Roll:%.2f,Pitch:%.2f,Yaw:%.2f\r\n",
+            pstDev->stAttitude.roll, pstDev->stAttitude.pitch, pstDev->stAttitude.yaw
+            );
+        }
+    }
+    vOledUpdate(OLED0);
+
+ */

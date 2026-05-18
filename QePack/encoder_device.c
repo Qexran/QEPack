@@ -179,7 +179,7 @@ void vEncoderDeviceInit(stEncoderStaticParamTdf *pstInit, emEncoderDevNumTdf emD
  * @return uint32_t 编码器计数
  */
 int32_t ulEncoderGetCount(emEncoderDevNumTdf emDevNum){
-    /* 单纯的获取计数值没有什么意义 */
+    if (emDevNum >= ENCODER_DEV_NUM) return 0;
     return astEncoderDeviceParam[emDevNum].stRunningParam.TotalPosition;
 }
 
@@ -189,11 +189,13 @@ int32_t ulEncoderGetCount(emEncoderDevNumTdf emDevNum){
  * @return fix32_t 编码器速度 (Q16.16)
  */
 fix32_t fEncoderGetSpeed(emEncoderDevNumTdf emDevNum){
+    if (emDevNum >= ENCODER_DEV_NUM) return FIX32_ZERO;
     return astEncoderDeviceParam[emDevNum].stRunningParam.fSpeed;
 }
 
 void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
 {
+    if (emDevNum >= ENCODER_DEV_NUM) return;
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
     stEncoderStaticParamTdf  *pstStatic  = &astEncoderDeviceParam[emDevNum].stStaticParam;
 
@@ -346,6 +348,7 @@ GPIO_PinState ReadPin(emEncoderDevNumTdf emDevNum){
 
 void vEncoder_Handler(emEncoderDevNumTdf emDevNum)
 {
+    if (emDevNum >= ENCODER_DEV_NUM) return;
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
     stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
 

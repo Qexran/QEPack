@@ -182,6 +182,8 @@ typedef enum
 #define MOTOR_SYSTEM_CONTROLLER_MAX_WHEEL_COUNT          4                               // 最大支持轮子数
 #define MOTOR_SYSTEM_CONTROLLER_MAX_ERROR_MM             5.0f                            // 位置控制精度要求 (mm)
 
+#define SENSOR_IS_ENABLE                                1
+
 /* MPU6050 相关 (开发中) */
 #define MPU6050_IS_ENABLE                               0                               // MPU6050 模块总开关
 

@@ -38,7 +38,7 @@ void vHC05SetName(emHC05DevNumTdf emDevNum, char *pcName)
 {
     char cCmd[64];
     if (emDevNum >= HC05_DEV_NUM || pcName == NULL) return;
-    sprintf(cCmd, "AT+NAME=%s", pcName);
+    snprintf(cCmd, sizeof(cCmd), "AT+NAME=%s", pcName);
     vHC05SendATCmd(emDevNum, cCmd);
 }
 
@@ -49,7 +49,7 @@ void vHC05SetPin(emHC05DevNumTdf emDevNum, char *pcPin)
 {
     char cCmd[64];
     if (emDevNum >= HC05_DEV_NUM || pcPin == NULL) return;
-    sprintf(cCmd, "AT+PSWD=%s", pcPin);
+    snprintf(cCmd, sizeof(cCmd), "AT+PSWD=%s", pcPin);
     vHC05SendATCmd(emDevNum, cCmd);
 }
 
@@ -60,7 +60,7 @@ void vHC05SetBaudRate(emHC05DevNumTdf emDevNum, unsigned long ulBaudRate)
 {
     char cCmd[64];
     if (emDevNum >= HC05_DEV_NUM) return;
-    sprintf(cCmd, "AT+UART=%lu,0,0", ulBaudRate);
+    snprintf(cCmd, sizeof(cCmd), "AT+UART=%lu,0,0", ulBaudRate);
     vHC05SendATCmd(emDevNum, cCmd);
 }
 
@@ -71,7 +71,7 @@ void vHC05SetRole(emHC05DevNumTdf emDevNum, emHC05RoleTdf emRole)
 {
     char cCmd[64];
     if (emDevNum >= HC05_DEV_NUM) return;
-    sprintf(cCmd, "AT+ROLE=%d", emRole);
+    snprintf(cCmd, sizeof(cCmd), "AT+ROLE=%d", emRole);
     vHC05SendATCmd(emDevNum, cCmd);
 }
 
@@ -109,10 +109,15 @@ void vHC05Transmit(emHC05DevNumTdf emDevNum, uint8_t *pucData, uint16_t usLen)
  */
 void vHC05Printf(emHC05DevNumTdf emDevNum, const char *pcFormat, ...)
 {
+    if (emDevNum >= HC05_DEV_NUM || pcFormat == NULL) return;
+
+    char cBuf[128];
     va_list args;
     va_start(args, pcFormat);
-    vUartPrintf(astHC05StaticParam[emDevNum].emUartDevNum, pcFormat, args);
+    vsnprintf(cBuf, sizeof(cBuf), pcFormat, args);
     va_end(args);
+
+    vUartSendArray(astHC05StaticParam[emDevNum].emUartDevNum, (uint8_t *)cBuf, strlen(cBuf));
 }
 
 #endif

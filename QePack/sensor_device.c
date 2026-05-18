@@ -167,24 +167,25 @@ fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNum
 
 /* ===================== 陀螺仪传感器 wrapper ===================== */
 
+#define GYRO_SENSOR_GLOBAL_BASE 10   /* emSensorAtkMs901MDevNum0 */
+
 #if ATK_MS901M_IS_ENABLE
 
 /** @brief 陀螺仪传感器设备结构体 */
 typedef struct {
-    stSensorDeviceTdf   stBase;           /* 基类（第一个成员） */
-    emUartDevNumTdf     emUartDevNum;     /* ATK-MS901M 关联的 UART 设备号 */
-    fix32_t             fCurrentYaw;      /* 当前读到的 yaw 值（-180~180） */
-    fix32_t             fLastYaw;         /* 上一次 yaw 值 */
-    fix32_t             fAccumulatedYaw;  /* 累积角度（处理跳变） */
-    fix32_t             fTargetYaw;       /* 目标角度 */
-    int32_t             lTurnCount;       /* 圈数计数 */
+    stSensorDeviceTdf      stBase;           /* 基类（第一个成员） */
+    emAtkMs901mDevNumTdf   emAtkDevNum;      /* ATK-MS901M 设备号（流式 API） */
+    fix32_t                fCurrentYaw;      /* 当前读到的 yaw 值（-180~180） */
+    fix32_t                fLastYaw;         /* 上一次 yaw 值 */
+    fix32_t                fAccumulatedYaw;  /* 累积角度（处理跳变） */
+    fix32_t                fTargetYaw;       /* 目标角度 */
+    int32_t                lTurnCount;       /* 圈数计数 */
 } stGyroSensorDeviceTdf;
 
 static void vGyroSensorInit(void *pstSensor)
 {
     stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
     (void)pstGyro;
-    /* ATK-MS901M 的初始化由上层在 UART 初始化阶段完成 */
 }
 
 static void vGyroSensorPeriodExecute(void *pstSensor)
@@ -192,14 +193,13 @@ static void vGyroSensorPeriodExecute(void *pstSensor)
     stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
     atk_ms901m_attitude_data_t stAttitude;
 
-    if (atk_ms901m_get_attitude(pstGyro->emUartDevNum, &stAttitude, 0) != ATK_MS901M_EOK) {
+    if (atk_ms901m_read_attitude(pstGyro->emAtkDevNum, &stAttitude) != ATK_MS901M_EOK) {
         return;
     }
 
     pstGyro->fLastYaw = pstGyro->fCurrentYaw;
     pstGyro->fCurrentYaw = fix32_from_float(stAttitude.yaw);
 
-    /* 检测 yaw 跳变（从 +180 跳到 -180 或反方向） */
     fix32_t fDelta = pstGyro->fCurrentYaw - pstGyro->fLastYaw;
     if (fDelta > ((fix32_t)(180 * 65536))) {
         pstGyro->lTurnCount--;
@@ -249,27 +249,29 @@ static stSensorVTableTdf g_stGyroSensorVTable = {
 
 static stGyroSensorDeviceTdf g_astGyroSensorDevices[3];
 
-void vGyroSensorRegister(emSensorDevNumTdf emDevNum, emUartDevNumTdf emUartDevNum)
+void vGyroSensorRegister(uint8_t ucLocalIdx, emAtkMs901mDevNumTdf emAtkDevNum)
 {
-    if (emDevNum >= 3) {
+    if (ucLocalIdx >= 3) {
         return;
     }
 
-    stGyroSensorDeviceTdf *pstGyro = &g_astGyroSensorDevices[emDevNum];
+    stGyroSensorDeviceTdf *pstGyro = &g_astGyroSensorDevices[ucLocalIdx];
     memset(pstGyro, 0, sizeof(stGyroSensorDeviceTdf));
 
     pstGyro->stBase.emType = emSensorTypeGyro;
     pstGyro->stBase.pstVTable = &g_stGyroSensorVTable;
     pstGyro->stBase.ucEnable = 1;
     pstGyro->stBase.fWeight = FIX32_ONE;
-    pstGyro->emUartDevNum = emUartDevNum;
+    pstGyro->emAtkDevNum = emAtkDevNum;
 
-    vSensorRegisterDevice(emDevNum, &pstGyro->stBase);
+    vSensorRegisterDevice((emSensorDevNumTdf)(GYRO_SENSOR_GLOBAL_BASE + ucLocalIdx), &pstGyro->stBase);
 }
 
 #endif /* ATK_MS901M_IS_ENABLE */
 
 /* ===================== 灰度传感器 wrapper ===================== */
+
+#define GRAY_SENSOR_GLOBAL_BASE 0    /* emSensorGrayDevNum0 */
 
 #if GRAY_SENSOR_IS_ENABLE
 
@@ -284,7 +286,6 @@ static void vGraySensorWrapperInit(void *pstSensor)
 {
     stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
     (void)pstGray;
-    /* 灰度传感器由上层通过 vGraySensorDeviceInit 初始化 */
 }
 
 static void vGraySensorWrapperPeriodExecute(void *pstSensor)
@@ -328,15 +329,15 @@ static stSensorVTableTdf g_stGraySensorWrapperVTable = {
     fGraySensorWrapperGetTarget,
 };
 
-static stGraySensorWrapperDeviceTdf g_astGraySensorWrapperDevices[2];
+static stGraySensorWrapperDeviceTdf g_astGraySensorWrapperDevices[3];
 
-void vGraySensorWrapperRegister(emSensorDevNumTdf emDevNum, emGraySensorDevNumTdf emGrayDevNum)
+void vGraySensorWrapperRegister(uint8_t ucLocalIdx, emGraySensorDevNumTdf emGrayDevNum)
 {
-    if (emDevNum >= 2) {
+    if (ucLocalIdx >= 3) {
         return;
     }
 
-    stGraySensorWrapperDeviceTdf *pstGray = &g_astGraySensorWrapperDevices[emDevNum];
+    stGraySensorWrapperDeviceTdf *pstGray = &g_astGraySensorWrapperDevices[ucLocalIdx];
     memset(pstGray, 0, sizeof(stGraySensorWrapperDeviceTdf));
 
     pstGray->stBase.emType = emSensorTypeGray;
@@ -345,12 +346,14 @@ void vGraySensorWrapperRegister(emSensorDevNumTdf emDevNum, emGraySensorDevNumTd
     pstGray->stBase.fWeight = FIX32_ONE;
     pstGray->emGrayDevNum = emGrayDevNum;
 
-    vSensorRegisterDevice(emDevNum, &pstGray->stBase);
+    vSensorRegisterDevice((emSensorDevNumTdf)(GRAY_SENSOR_GLOBAL_BASE + ucLocalIdx), &pstGray->stBase);
 }
 
 #endif /* GRAY_SENSOR_IS_ENABLE */
 
 /* ===================== CCD 传感器 wrapper ===================== */
+
+#define CCD_SENSOR_GLOBAL_BASE 3     /* emSensorCCDDevNum0 */
 
 #if LINEAR_CCD_IS_ENABLE
 
@@ -378,7 +381,6 @@ static void vCCDSensorPeriodExecute(void *pstSensor)
 static fix32_t fCCDSensorGetValue(void *pstSensor)
 {
     stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
-    /* 返回中线相对于图像中心的偏移量 */
     return (fix32_t)((int64_t)(sLinerCcdGetCenterLine(pstCCD->emCCDDevNum)) * 65536);
 }
 
@@ -409,15 +411,15 @@ static stSensorVTableTdf g_stCCDSensorVTable = {
     fCCDSensorGetTarget,
 };
 
-static stCCDSensorDeviceTdf g_astCCDSensorDevices[2];
+static stCCDSensorDeviceTdf g_astCCDSensorDevices[4];
 
-void vCCDSensorRegister(emSensorDevNumTdf emDevNum, emLinerCcdDevNumTdf emCCDDevNum)
+void vCCDSensorRegister(uint8_t ucLocalIdx, emLinerCcdDevNumTdf emCCDDevNum)
 {
-    if (emDevNum >= 2) {
+    if (ucLocalIdx >= 4) {
         return;
     }
 
-    stCCDSensorDeviceTdf *pstCCD = &g_astCCDSensorDevices[emDevNum];
+    stCCDSensorDeviceTdf *pstCCD = &g_astCCDSensorDevices[ucLocalIdx];
     memset(pstCCD, 0, sizeof(stCCDSensorDeviceTdf));
 
     pstCCD->stBase.emType = emSensorTypeCCD;
@@ -426,7 +428,7 @@ void vCCDSensorRegister(emSensorDevNumTdf emDevNum, emLinerCcdDevNumTdf emCCDDev
     pstCCD->stBase.fWeight = FIX32_ONE;
     pstCCD->emCCDDevNum = emCCDDevNum;
 
-    vSensorRegisterDevice(emDevNum, &pstCCD->stBase);
+    vSensorRegisterDevice((emSensorDevNumTdf)(CCD_SENSOR_GLOBAL_BASE + ucLocalIdx), &pstCCD->stBase);
 }
 
 #endif /* LINEAR_CCD_IS_ENABLE */

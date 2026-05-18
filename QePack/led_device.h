@@ -6,11 +6,11 @@
   * @brief      LED 驱动，基于 STM32 HAL 库
   * 
   */
-#include "project_config.h"
-#if LED_IS_ENABLE
-
 #ifndef _LED_DEVICE_H_
 #define _LED_DEVICE_H_
+
+#include "project_config.h"
+#if LED_IS_ENABLE
 
 #include "string.h"
 #include "arithmetic.h"
@@ -101,6 +101,7 @@ typedef struct
     
 	/* LED呼吸灯相关函数: vLedDeviceBreathExecute */
     uint32_t            ulBreathPeriod;         // 呼吸周期
+    uint32_t            ulBreathCount;          // 当前呼吸计数值（per-device）
 	
 }
 stLedRunningParamTdf;

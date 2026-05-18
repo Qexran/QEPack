@@ -126,6 +126,7 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
     */
     void vAdcStart(emAdcDevNumTdf emDevNum)
     {
+        if (emDevNum >= ADC_DEV_NUM) return;
 
     //    stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
         stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
@@ -206,6 +207,7 @@ float fADCConvertToResult(
     * @return uint16_t* DMA转换值指针
     */
     uint16_t* pstADCGetValue(emAdcDevNumTdf emDevNum){
+        if (emDevNum >= ADC_DEV_NUM) return NULL;
         #if (QEPACK_PLATFORM == TI)
             DL_ADC12_enableConversions(ADC12_0_INST);
             DL_ADC12_disableConversions(ADC12_0_INST);
@@ -221,6 +223,7 @@ float fADCConvertToResult(
     * @return uint16_t 单次转换值
     */
     uint16_t usADCGetValue(emAdcDevNumTdf emDevNum){
+        if (emDevNum >= ADC_DEV_NUM) return 0;
         #if (QEPACK_PLATFORM == ST)
             ADC_HandleTypeDef* pstAdcBase = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
             // 停止当前转换
@@ -254,7 +257,7 @@ float fADCConvertToResult(
         while(emAdcGetDataState(emDevNum) != UPDATED){
             mspm0_get_clock_ms(&cur);
             
-            if(cur >= (start + ulTimeOut)) return QE_TIMEOUT;
+            if((cur - start) >= ulTimeOut) return QE_TIMEOUT;
         }
 
         return QE_OK;
@@ -267,6 +270,7 @@ float fADCConvertToResult(
  * @return emAdcDataStateTdf 转换状态
  */
 emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
+    if (emDevNum >= ADC_DEV_NUM) return NOT_UPDATE;
 #if ADC_IS_USE_DMA
     emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.emDataState;
 
@@ -328,12 +332,13 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
                 return (emAdcDevNumTdf)i;
             }
         }
-        return 0;
+        return (emAdcDevNumTdf)ADC_DEV_NUM;
     }
-    
+
     /** 以MSPM0G3507为例，只能开两个ADC，故只适配两个对应的回调函数 */
     void ADC0_IRQHandler(void){
         emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC0);
+        if (emDevNum >= ADC_DEV_NUM) return;
         stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
         stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
         
@@ -362,6 +367,7 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
 
     void ADC1_IRQHandler(void){
         emAdcDevNumTdf emDevNum = emCheckCallbackBelong(ADC1);
+        if (emDevNum >= ADC_DEV_NUM) return;
         stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
         stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
 

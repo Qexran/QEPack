@@ -8,11 +8,11 @@
  * 本模块基于博客 2 (weixin_44567668) 的设计思路，实现了编码器位置和速度的测量，
  * 包括溢出处理、软件滤波等功能。
  */
-#include "project_config.h"
-#if ENCODER_IS_ENABLE
-
 #ifndef _ENCODER_DEVICE_H_
 #define _ENCODER_DEVICE_H_
+
+#include "project_config.h"
+#if ENCODER_IS_ENABLE
 
 #include "string.h"
 #include "arithmetic.h"

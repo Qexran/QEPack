@@ -72,10 +72,10 @@ void SPI1_IRQHandler(void)
     __BKPT();
 }
 
-// void UART1_IRQHandler(void)
-// {
-//     __BKPT();
-// }
+void UART1_IRQHandler(void)
+{
+    __BKPT();
+}
 
 void TIMG0_IRQHandler(void)
 {

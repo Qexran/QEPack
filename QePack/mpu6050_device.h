@@ -70,12 +70,14 @@ typedef struct {
 
 /** @brief MPU6050 运行参数 */
 typedef struct {
-    stMpu6050AttitudeTdf   stAttitude;   /* 姿态角 */
-    stMpu6050QuaternionTdf stQuat;       /* 四元数 */
+    stMpu6050AttitudeTdf   stAttitude;   /* 姿态角（主循环按需计算） */
+    stMpu6050QuaternionTdf stQuat;       /* 四元数（Q30 浮点值） */
     stMpu6050GyroRawTdf    stGyro;       /* 陀螺仪原始值 */
     stMpu6050AccelRawTdf   stAccel;      /* 加速度原始值 */
+    long                   alQuatRaw[4]; /* 原始四元数（Q30 定点，ISR 仅缓存） */
     uint8_t                ucDmpReady;   /* DMP 初始化完成标志 */
-    uint8_t                ucDataUpdated;/* 数据更新标志 */
+    uint8_t                ucDataUpdated;/* 原始数据更新标志（ISR 设置） */
+    uint8_t                ucAttitudeDirty;/* 姿态需重算标志 */
 } stMpu6050RunningParamTdf;
 
 /** @brief MPU6050 设备参数总结构体 */

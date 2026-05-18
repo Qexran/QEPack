@@ -21,7 +21,6 @@
 #include "stdarg.h"
 #include "string.h"
 #include "stdio.h"
-#include "math.h"
 
 /// @brief          UART设备号枚举
 typedef enum

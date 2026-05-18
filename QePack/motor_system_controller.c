@@ -166,9 +166,14 @@ void vMotorSystemSetSpeed(fix32_t fLeftFrontSpeed, fix32_t fRightFrontSpeed,
     stMotorSystemStaticParamTdf *pstStatic = g_stMotorSystemController.stStaticParam;
     if (pstStatic == NULL) return;
 
-    /* 存储基准速度用于传感器修正（先移位再相加，避免溢出） */
-    g_fBaseLeftSpeed = (fLeftFrontSpeed >> 1) + (fLeftBackSpeed >> 1);
-    g_fBaseRightSpeed = (fRightFrontSpeed >> 1) + (fRightBackSpeed >> 1);
+    /* 存储基准速度用于传感器修正（使用除法避免移位对负值的向下偏置） */
+    {
+        fix32_t fSumL = fLeftFrontSpeed + fLeftBackSpeed;
+        fix32_t fSumR = fRightFrontSpeed + fRightBackSpeed;
+        fix32_t fTwo = (fix32_t)(2 << FIX32_FRAC_BITS);
+        g_fBaseLeftSpeed = fix32_div(fSumL, fTwo);
+        g_fBaseRightSpeed = fix32_div(fSumR, fTwo);
+    }
 
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:

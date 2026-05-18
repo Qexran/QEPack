@@ -8,6 +8,9 @@
   *             内部使用 Q16.16 定点数运算
   */
 
+#ifndef _GEAR_MOTOR_DEVICE_H_
+#define _GEAR_MOTOR_DEVICE_H_
+
 #include "project_config.h"
 
 #if GEAR_MOTOR_IS_ENABLE
@@ -15,9 +18,6 @@
 #include "encoder_device.h"
 #include "motor_device.h"
 #include "pid_controller.h"
-
-#ifndef _GEAR_MOTOR_DEVICE_H_
-#define _GEAR_MOTOR_DEVICE_H_
 
 
 #if (QEPACK_PLATFORM == TI)

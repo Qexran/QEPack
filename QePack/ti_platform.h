@@ -125,7 +125,7 @@ void TI_I2C_Mem_Write(
 );
 
 QE_StatusTypeDef TI_UART_Transmit(
-    stUartTdf *i2c_inst, const uint8_t *pData, 
+    stUartTdf *uart_inst, const uint8_t *pData,
     uint16_t Size, uint32_t Timeout
 );
 

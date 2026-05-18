@@ -27,7 +27,9 @@ static void vEmmMotorSendCmd(
 ) {
     uint8_t aucCmd[32];
     uint8_t ucIndex = 0;
-    
+
+    if (ucDataLen > 30) ucDataLen = 30;
+
     aucCmd[ucIndex++] = pstEmmMotor->stStaticParam.ucAddr;
     for (uint8_t i = 0; i < ucDataLen; i++) {
         aucCmd[ucIndex++] = pucCmdData[i];

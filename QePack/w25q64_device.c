@@ -96,7 +96,8 @@ uint8_t ucW25q64ReadStatus1(emW25q64DevNumTdf emDevNum)
  */
 void vW25q64WaitBusy(emW25q64DevNumTdf emDevNum)
 {
-    while (ucW25q64ReadStatus1(emDevNum) & 0x01);
+    volatile uint32_t ulTimeout = 1000000;
+    while ((ucW25q64ReadStatus1(emDevNum) & 0x01) && --ulTimeout);
 }
 
 /**

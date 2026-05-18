@@ -28,22 +28,35 @@ typedef enum {
 
 /** @brief 传感器设备号枚举 */
 typedef enum {
-    // 陀螺仪传感器设备号
-    emSensorGyroDevNum0     = 0,
-    emSensorGyroDevNum1     = 1,
-    emSensorGyroDevNum2     = 2,
-
     // 灰度传感器设备号
-    emSensorGrayDevNum0     = 3,
-    emSensorGrayDevNum1     = 4,
-    emSensorGrayDevNum2     = 5,
+    emSensorGrayDevNum0     = 0,
+    emSensorGrayDevNum1     = 1,
+    emSensorGrayDevNum2     = 2,
 
     // 线性CCD传感器设备号
-    emSensorCCDDevNum0      = 6,
-    emSensorCCDDevNum1      = 7,
-    emSensorCCDDevNum2      = 8,
+    emSensorCCDDevNum0      = 3,
+    emSensorCCDDevNum1      = 4,
+    emSensorCCDDevNum2      = 5,
+    emSensorCCDDevNum3      = 6,
 
-    emSensorMaxDevNum      = 9,
+    // 陀螺仪传感器设备号
+    emSensorMPU6050DevNum0     = 7,     /* MPU6050 陀螺仪 */
+    emSensorMPU6050DevNum1     = 8,
+    emSensorMPU6050DevNum2     = 9,
+
+    emSensorAtkMs901MDevNum0   = 10,    /* ATK901M 陀螺仪 */
+    emSensorAtkMs901MDevNum1   = 11,
+    emSensorAtkMs901MDevNum2   = 12,
+
+    emSensor660RBDevNum0       = 13,    /* 660RB 陀螺仪 */
+    emSensor660RBDevNum1       = 14,
+    emSensor660RBDevNum2       = 15,
+    
+    emSensorNBO08XDevNum0        = 16,    /* NBO08X 陀螺仪 */
+    emSensorNBO08XDevNum1        = 17,
+    emSensorNBO08XDevNum2        = 18,
+
+    emSensorMaxDevNum      = 19,
 
     emNoSensor = 0xFF,
 } emSensorDevNumTdf;
@@ -84,22 +97,22 @@ void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight);
 /* 传感器融合 互补滤波 */
 fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNumB);
 
-/* 陀螺仪传感器注册 */
+/* 陀螺仪传感器注册（ucLocalIdx: 0-2 对应 ATK-MS901M 设备 0-2） */
 #if ATK_MS901M_IS_ENABLE
     #include "atk_ms901m_device.h"
-    void vGyroSensorRegister(emSensorDevNumTdf emDevNum, emUartDevNumTdf emUartDevNum);
+    void vGyroSensorRegister(uint8_t ucLocalIdx, emAtkMs901mDevNumTdf emAtkDevNum);
 #endif
 
-/* 灰度传感器注册 */
+/* 灰度传感器注册（ucLocalIdx: 0-2 对应灰度设备 0-2） */
 #if GRAY_SENSOR_IS_ENABLE
     #include "gray_sensor_device.h"
-    void vGraySensorWrapperRegister(emSensorDevNumTdf emDevNum, emGraySensorDevNumTdf emGrayDevNum);
+    void vGraySensorWrapperRegister(uint8_t ucLocalIdx, emGraySensorDevNumTdf emGrayDevNum);
 #endif
 
-/* CCD 传感器注册 */
+/* CCD 传感器注册（ucLocalIdx: 0-3 对应 CCD 设备 0-3） */
 #if LINEAR_CCD_IS_ENABLE
     #include "linear_ccd_device.h"
-    void vCCDSensorRegister(emSensorDevNumTdf emDevNum, emLinerCcdDevNumTdf emCCDDevNum);
+    void vCCDSensorRegister(uint8_t ucLocalIdx, emLinerCcdDevNumTdf emCCDDevNum);
 #endif
 
 #endif /* SENSOR_IS_ENABLE */

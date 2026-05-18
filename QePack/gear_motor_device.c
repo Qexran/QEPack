@@ -187,7 +187,7 @@ static void vGearMotorPosPeriodExecute(stGearMotorDeviceParamTdf *pstMotorDev)
                       * (int64_t)lCountsPerRev;
         int64_t llDen = (int64_t)120000 * (int64_t)fDecStep;
         if (llDen > 0) {
-            lDecelPulses = (int32_t)((llNum >> FIX32_FRAC_BITS) / llDen);
+            lDecelPulses = (int32_t)((llNum / llDen) >> FIX32_FRAC_BITS);
         } else {
             lDecelPulses = 1;
         }
@@ -813,7 +813,7 @@ void vGearMotorSetSpeed(void *pstMotor, int16_t speed)
     stGearMotorStaticParamTdf *pstStatic = &pstGearMotor->stStaticParam;
 
     /* 计算速度的绝对值，用于PWM占空比 */
-    uint16_t absSpeed = (speed < 0) ? (uint16_t)(-speed) : (uint16_t)speed;
+    uint16_t absSpeed = (speed < 0) ? (uint16_t)(-(int32_t)speed) : (uint16_t)speed;
 
     /* 占空比死区处理：克服摩擦力的最小驱动 */
     if (absSpeed > 0 && absSpeed < pstStatic->u16MinDuty) {

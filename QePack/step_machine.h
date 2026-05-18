@@ -79,7 +79,7 @@ typedef struct {
 } stStepDevParamTdf;
 
 // 对外接口(极简，核心：可变参数初始化接口)
-void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, int endStep, ...);
+void vStepInit(emSmStepDevTdf emDevNum, uint8_t stepTotal, uint8_t isCycle, unsigned int endStep, ...);
 void vStepReset(emSmStepDevTdf emDevNum);
 void vStepStart(emSmStepDevTdf emDevNum);
 void vStepStop(emSmStepDevTdf emDevNum);

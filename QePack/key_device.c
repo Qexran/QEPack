@@ -198,15 +198,13 @@ void vKeyDevicePeriodExecute(emKeyDevNumTdf emDevNum)
  */
 emKeyEventTdf emKeyGetEvent(emKeyDevNumTdf emDevNum)
 {
+    if(emDevNum >= KEY_DEV_NUM) return emKeyEvent_None;
     return astKeyDeviceParam[emDevNum].stRunningParam.emKeyEvent;
 }
 
-/**
- * @brief      清除按键事件
- * @param      emDevNum   ：设备号
- */
 void vKeyClearEvent(emKeyDevNumTdf emDevNum)
 {
+    if(emDevNum >= KEY_DEV_NUM) return;
     astKeyDeviceParam[emDevNum].stRunningParam.emKeyEvent = emKeyEvent_None;
 }
 

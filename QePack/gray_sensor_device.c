@@ -45,6 +45,13 @@ void vGraySensorDeviceInit(stGraySensorStaticParamTdf *pstInit, emGraySensorDevN
     stGraySensorRunningParamTdf *pstRunning = &astGraySensorDeviceParam[emDevNum].stRunningParam;
     pstRunning->emStopState = emGrayStopNormal;
     pstRunning->ucEnableSensor = 1;
+
+    if (astGraySensorDeviceParam[emDevNum].stStaticParam.ucBackupLength > GRAY_SENSOR_BACKUP_MAX_LEN) {
+        astGraySensorDeviceParam[emDevNum].stStaticParam.ucBackupLength = GRAY_SENSOR_BACKUP_MAX_LEN;
+    }
+    if (astGraySensorDeviceParam[emDevNum].stStaticParam.ucBackupLength == 0) {
+        astGraySensorDeviceParam[emDevNum].stStaticParam.ucBackupLength = 1;
+    }
 }
 
 /* 灰度传感器状态到偏移量的查找表（-128 表示使用上一次值） */
@@ -92,10 +99,12 @@ static int16_t sGraySensorCalcAverage(emGraySensorDevNumTdf emDevNum)
 {
     stGraySensorStaticParamTdf *pstStatic = &astGraySensorDeviceParam[emDevNum].stStaticParam;
     stGraySensorRunningParamTdf *pstRunning = &astGraySensorDeviceParam[emDevNum].stRunningParam;
-    
+
+    if (pstStatic->ucBackupLength == 0) return 0;
+
     int32_t lSum = 0;
     for (uint8_t i = 0; i < pstStatic->ucBackupLength; i++) {
-        lSum += pstRunning->psStatusBackup[i];
+        lSum += pstRunning->asStatusBackup[i];
     }
     return (int16_t)(lSum / pstStatic->ucBackupLength);
 }
@@ -172,9 +181,9 @@ void vGraySensorCheck(emGraySensorDevNumTdf emDevNum)
     pstRunning->ucBackupIdx = (pstRunning->ucBackupIdx + 1) % pstStatic->ucBackupLength;
     
     if (pstStatic->ucGrayDirection) {
-        pstRunning->psStatusBackup[pstRunning->ucBackupIdx] = sTempStatus;
+        pstRunning->asStatusBackup[pstRunning->ucBackupIdx] = sTempStatus;
     } else {
-        pstRunning->psStatusBackup[pstRunning->ucBackupIdx] = -sTempStatus;
+        pstRunning->asStatusBackup[pstRunning->ucBackupIdx] = -sTempStatus;
     }
     
     pstRunning->sGrayStatus = sGraySensorCalcAverage(emDevNum);

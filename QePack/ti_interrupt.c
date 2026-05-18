@@ -11,6 +11,10 @@ CREATE_UART_IRQ_HANDLER(UART_0, UART_DEVICE_0)
 // CREATE_UART_IRQ_HANDLER(UART_EMM, UART_DEVICE_1)
 
 // CREATE_UART_IRQ_HANDLER(UART_ATK, UART_DEVICE_1)
+/* 注意：此处使用 Extend API（DL_UART_getPendingInterrupt / DL_UART_IIDX），
+   与 CREATE_UART_IRQ_HANDLER 宏使用的 Main API 不同。
+   Main API 宏适用于通过 SysConfig 生成的 UART 实例，
+   手动编写的 UART3 中断使用 Extend API 直接操作外设基址。 */
 void UART3_IRQHandler(void) {
   DL_UART_IIDX iidx;
   while ((iidx = DL_UART_getPendingInterrupt(UART3)) !=

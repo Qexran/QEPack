@@ -24,6 +24,7 @@ stUltrasonicDeviceParamTdf astUltrasonicDeviceParam[ULTRASONIC_DEV_NUM];
  */
 const stUltrasonicDeviceParamTdf *c_pstGetUltrasonicDeviceParam(emUltrasonicDevNumTdf emDevNum)
 {
+    if (emDevNum >= ULTRASONIC_DEV_NUM) return NULL;
     return &astUltrasonicDeviceParam[emDevNum];
 }
 
@@ -34,7 +35,7 @@ const stUltrasonicDeviceParamTdf *c_pstGetUltrasonicDeviceParam(emUltrasonicDevN
  */
 void vUltrasonicDeviceRunningParamInit(stUltrasonicRunningParamTdf *pstInit, emUltrasonicDevNumTdf emDevNum)
 {
-    memcpy(&astUltrasonicDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stUltrasonicRunningParamTdf) / sizeof(uint8_t));
+    memcpy(&astUltrasonicDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stUltrasonicRunningParamTdf));
 }
 
 /**
@@ -45,7 +46,7 @@ void vUltrasonicDeviceRunningParamInit(stUltrasonicRunningParamTdf *pstInit, emU
 void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevNumTdf emDevNum)
 {
     // 拷贝静态参数（硬件配置）
-    memcpy(&astUltrasonicDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stUltrasonicStaticParamTdf) / sizeof(uint8_t));
+    memcpy(&astUltrasonicDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stUltrasonicStaticParamTdf));
     
     // 默认运行参数初始化
     stUltrasonicRunningParamTdf stDefaultRunning = {
@@ -66,7 +67,8 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
  * @param      emDevNum   ：设备号
  */
 void vUltrasonicStartMeasure(emUltrasonicDevNumTdf emDevNum)
-{		
+{
+    if (emDevNum >= ULTRASONIC_DEV_NUM) return;
     stUltrasonicStaticParamTdf *pstStatic = &astUltrasonicDeviceParam[emDevNum].stStaticParam;
     stUltrasonicRunningParamTdf *pstRunning = &astUltrasonicDeviceParam[emDevNum].stRunningParam;
 	
@@ -174,16 +176,13 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
  */
 float fUltrasonicGetDistance(emUltrasonicDevNumTdf emDevNum)
 {
+    if (emDevNum >= ULTRASONIC_DEV_NUM) return 0.0f;
     return astUltrasonicDeviceParam[emDevNum].stRunningParam.fDistance;
 }
 
-/**
- * @brief      获取测量是否成功
- * @param      emDevNum   ：设备号
- * @return     0-失败 1-成功
- */
 uint8_t ucUltrasonicIsMeasureSuccess(emUltrasonicDevNumTdf emDevNum)
 {
+    if (emDevNum >= ULTRASONIC_DEV_NUM) return 0;
     return astUltrasonicDeviceParam[emDevNum].stRunningParam.ucIsSuccess;
 }
 

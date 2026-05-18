@@ -9,13 +9,13 @@
  * 支持变速积分、积分分离和不完全微分功能，包括比例、积分、微分控制，
  * 以及积分限幅和输出限幅功能。内部使用 Q16.16 定点数运算。
  */
-#include "project_config.h"
-#include "arithmetic.h"
-#include <string.h>
-#if PID_IS_ENABLE
-
 #ifndef _PID_CONTROLLER_H_
 #define _PID_CONTROLLER_H_
+
+#include "project_config.h"
+#include "arithmetic.h"
+#include "string.h"
+#if PID_IS_ENABLE
 
 /** @brief PID设备号枚举 */
 typedef enum {

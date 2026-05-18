@@ -137,7 +137,7 @@ void TI_I2C_Mem_Write(
         I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint16_t MemAddress, 
         uint16_t MemAddSize, uint8_t *pData, uint16_t Size, uint32_t Timeout
     */
-    for(uint8_t i = 0;i < Size; i++){
+    for(uint16_t i = 0;i < Size; i++){
 
         ptr[0] = MemAddress;
         ptr[1] = pData[i];
@@ -155,7 +155,7 @@ void TI_I2C_Mem_Write(
         while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE))
         {
             mspm0_get_clock_ms(&cur);
-            if(cur >= (start + Timeout))
+            if((cur - start) >= Timeout)
             {
                 i2c_sda_unlock(pstIdf);
                 break;
@@ -291,8 +291,11 @@ void vTiClearFlashDebris(void)
         DL_FLASHCTL_COMMAND_SIZE_SECTOR
     );
 
-    // 5. 必须等待擦除完成，操作完再往下走
-    for(uint16_t i = 0;i < 5000; i++);
+    // 5. 等待 Flash 擦除完成（硬件状态轮询 + 超时保护）
+    {
+        volatile uint32_t ulFlashTimeout = 100000;
+        while (ulFlashTimeout-- && DL_FlashCTL_getCommandStatus(FLASHCTL) == DL_FLASHCTL_COMMAND_STATUS_IN_PROGRESS);
+    }
 
     // 6. 重新加锁扇区，保护Flash
     DL_FlashCTL_protectSector(

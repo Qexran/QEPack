@@ -526,7 +526,7 @@ uint8_t OLED_IsInAngle(int16_t X, int16_t Y, int16_t StartAngle, int16_t EndAngl
   */
 void vOledUpdate(emOledDevNumTdf emDevNum)
 {
-	if(&astOledDeviceParam[emDevNum] == NULL){
+	if(emDevNum >= OLED_DEV_NUM){
 		return;
 	}
 	
@@ -1010,12 +1010,12 @@ void vOledShowImage(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, uint8_t Widt
   */
 void vOledPrintf(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, emOledFontSizeTdf FontSize, char *format, ...)
 {
-	char String[30];											//定义字符数组
-	va_list arg;												//定义可变参数列表数据类型的变量arg
-	va_start(arg, format);										//从format开始，接收参数列表到arg变量
-	vsprintf(String, format, arg);								//使用vsprintf打印格式化字符串和参数列表到字符数组中
-	va_end(arg);												//结束变量arg
-	vOledShowString(emDevNum, X, Y, FontSize, String);			//OLED显示字符数组（字符串）
+	char String[64];
+	va_list arg;
+	va_start(arg, format);
+	vsnprintf(String, sizeof(String), format, arg);
+	va_end(arg);
+	vOledShowString(emDevNum, X, Y, FontSize, String);
 }
 
 /**

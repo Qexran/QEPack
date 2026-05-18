@@ -241,16 +241,21 @@ void vUartSendByte(emUartDevNumTdf emDevNum, uint8_t ucData)
 /// @brief      接收单个字节
 /// @param      emDevNum   ：设备号
 /// @return     接收到的字节
+/// @note       关中断保护 count-- 操作，防止与 ISR 中 count++ 产生 RMW 竞争
+///             (Cortex-M0+ 无原子 RMW 指令)
 uint8_t ucUartReceiveByte(emUartDevNumTdf emDevNum)
 {
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 
     uint8_t data = 0;
+    uint32_t ulPrimask = __get_PRIMASK();
+    __disable_irq();
     if (pstRunning->stUartTempBuffer.count > 0) {
         data = pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.tail];
         pstRunning->stUartTempBuffer.tail = (pstRunning->stUartTempBuffer.tail + 1) % UART_BUF_MAX_LEN;
         pstRunning->stUartTempBuffer.count--;
     }
+    __set_PRIMASK(ulPrimask);
     return data;
 }
 

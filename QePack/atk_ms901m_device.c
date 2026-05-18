@@ -60,14 +60,8 @@ typedef struct
     uint8_t                         ucGyroFsr;
     uint8_t                         ucAccelFsr;
 
-    /* 最新传感器数据缓存 */
-    atk_ms901m_attitude_data_t      stAttitude;
-    atk_ms901m_quaternion_data_t    stQuaternion;
-    atk_ms901m_gyro_data_t          stGyro;
-    atk_ms901m_accelerometer_data_t stAccel;
-    atk_ms901m_magnetometer_data_t  stMag;
-    atk_ms901m_barometer_data_t     stBaro;
-    atk_ms901m_port_data_t          stPort;
+    /* 最新传感器数据缓存（嵌入设备参数结构体，用户可通过 getter 只读访问） */
+    stAtkMs901mDeviceParamTdf       stDeviceParam;
 
     /* 数据更新标志（收到帧后置 1，用户读取后可选清除） */
     uint8_t                         ucAttitudeUpdated  : 1;
@@ -80,12 +74,12 @@ typedef struct
 
 static atk_ms901m_runtime_t g_astRuntime[ATK_MS901M_DEV_NUM];
 
-/* 阻塞模式使用的满量程缓存（兼容旧 API） */
+/* 阻塞模式使用的满量程缓存（兼容旧 API），默认最大量程避免溢出 */
 static struct
 {
     uint8_t ucGyroFsr;
     uint8_t ucAccelFsr;
-} g_stBlockingFsr;
+} g_stBlockingFsr = {3, 3};  /* 2000dps, 16g */
 
 /* ---- 前向声明 ---- */
 static void vAtkMs901mUartCallback(emUartDevNumTdf emUartDevNum, stUartRunningParamTdf *pstRunning);
@@ -93,6 +87,41 @@ static void vAtkMs901mUartCallback(emUartDevNumTdf emUartDevNum, stUartRunningPa
 /* ================================================================ */
 /*  内部帧解码                                                       */
 /* ================================================================ */
+
+/**
+ * @brief  解析 GYRO_ACCE 帧数据（流式/阻塞共用）
+ */
+static void vAtkMs901mDecodeGyroAccel(const uint8_t *pucDat, uint8_t ucGyroFsr, uint8_t ucAccelFsr,
+                                       atk_ms901m_gyro_data_t *pstGyro,
+                                       atk_ms901m_accelerometer_data_t *pstAccel)
+{
+    if (pstGyro != NULL && ucGyroFsr < 4)
+    {
+        int16_t i16Raw;
+        i16Raw = (int16_t)(pucDat[7] << 8) | pucDat[6];
+        pstGyro->raw.x = i16Raw;
+        pstGyro->x = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[ucGyroFsr];
+        i16Raw = (int16_t)(pucDat[9] << 8) | pucDat[8];
+        pstGyro->raw.y = i16Raw;
+        pstGyro->y = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[ucGyroFsr];
+        i16Raw = (int16_t)(pucDat[11] << 8) | pucDat[10];
+        pstGyro->raw.z = i16Raw;
+        pstGyro->z = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[ucGyroFsr];
+    }
+    if (pstAccel != NULL && ucAccelFsr < 4)
+    {
+        int16_t i16Raw;
+        i16Raw = (int16_t)(pucDat[1] << 8) | pucDat[0];
+        pstAccel->raw.x = i16Raw;
+        pstAccel->x = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[ucAccelFsr];
+        i16Raw = (int16_t)(pucDat[3] << 8) | pucDat[2];
+        pstAccel->raw.y = i16Raw;
+        pstAccel->y = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[ucAccelFsr];
+        i16Raw = (int16_t)(pucDat[5] << 8) | pucDat[4];
+        pstAccel->raw.z = i16Raw;
+        pstAccel->z = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[ucAccelFsr];
+    }
+}
 
 /**
  * @brief  解析单个完成帧并缓存传感器数据
@@ -103,77 +132,52 @@ static void vAtkMs901mDecodeFrame(atk_ms901m_runtime_t *pstRt, atk_ms901m_frame_
     {
         case ATK_MS901M_FRAME_ID_ATTITUDE:
         {
-            pstRt->stAttitude.roll  = (float)((int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0]) / 32768.0f * 180.0f;
-            pstRt->stAttitude.pitch = (float)((int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2]) / 32768.0f * 180.0f;
-            pstRt->stAttitude.yaw   = (float)((int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4]) / 32768.0f * 180.0f;
+            pstRt->stDeviceParam.stAttitude.roll  = (float)((int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0]) / 32768.0f * 180.0f;
+            pstRt->stDeviceParam.stAttitude.pitch = (float)((int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2]) / 32768.0f * 180.0f;
+            pstRt->stDeviceParam.stAttitude.yaw   = (float)((int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4]) / 32768.0f * 180.0f;
             pstRt->ucAttitudeUpdated = 1;
             break;
         }
         case ATK_MS901M_FRAME_ID_QUAT:
         {
-            pstRt->stQuaternion.q0 = (float)((int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0]) / 32768.0f;
-            pstRt->stQuaternion.q1 = (float)((int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2]) / 32768.0f;
-            pstRt->stQuaternion.q2 = (float)((int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4]) / 32768.0f;
-            pstRt->stQuaternion.q3 = (float)((int16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6]) / 32768.0f;
+            pstRt->stDeviceParam.stQuaternion.q0 = (float)((int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0]) / 32768.0f;
+            pstRt->stDeviceParam.stQuaternion.q1 = (float)((int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2]) / 32768.0f;
+            pstRt->stDeviceParam.stQuaternion.q2 = (float)((int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4]) / 32768.0f;
+            pstRt->stDeviceParam.stQuaternion.q3 = (float)((int16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6]) / 32768.0f;
             pstRt->ucQuatUpdated = 1;
             break;
         }
         case ATK_MS901M_FRAME_ID_GYRO_ACCE:
         {
-            /* 陀螺仪 */
-            if (pstRt->ucGyroFsr < 4)
-            {
-                int16_t i16Raw;
-                i16Raw = (int16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6];
-                pstRt->stGyro.raw.x = i16Raw;
-                pstRt->stGyro.x = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[pstRt->ucGyroFsr];
-                i16Raw = (int16_t)(pstFrame->dat[9] << 8) | pstFrame->dat[8];
-                pstRt->stGyro.raw.y = i16Raw;
-                pstRt->stGyro.y = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[pstRt->ucGyroFsr];
-                i16Raw = (int16_t)(pstFrame->dat[11] << 8) | pstFrame->dat[10];
-                pstRt->stGyro.raw.z = i16Raw;
-                pstRt->stGyro.z = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[pstRt->ucGyroFsr];
-            }
-            /* 加速度计 */
-            if (pstRt->ucAccelFsr < 4)
-            {
-                int16_t i16Raw;
-                i16Raw = (int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0];
-                pstRt->stAccel.raw.x = i16Raw;
-                pstRt->stAccel.x = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[pstRt->ucAccelFsr];
-                i16Raw = (int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2];
-                pstRt->stAccel.raw.y = i16Raw;
-                pstRt->stAccel.y = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[pstRt->ucAccelFsr];
-                i16Raw = (int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4];
-                pstRt->stAccel.raw.z = i16Raw;
-                pstRt->stAccel.z = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[pstRt->ucAccelFsr];
-            }
+            vAtkMs901mDecodeGyroAccel(pstFrame->dat, pstRt->ucGyroFsr, pstRt->ucAccelFsr,
+                                       &pstRt->stDeviceParam.stGyro,
+                                       &pstRt->stDeviceParam.stAccel);
             pstRt->ucGyroAccelUpdated = 1;
             break;
         }
         case ATK_MS901M_FRAME_ID_MAG:
         {
-            pstRt->stMag.x = (int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0];
-            pstRt->stMag.y = (int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2];
-            pstRt->stMag.z = (int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4];
-            pstRt->stMag.temperature = (float)((int16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6]) / 100.0f;
+            pstRt->stDeviceParam.stMag.x = (int16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0];
+            pstRt->stDeviceParam.stMag.y = (int16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2];
+            pstRt->stDeviceParam.stMag.z = (int16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4];
+            pstRt->stDeviceParam.stMag.temperature = (float)((int16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6]) / 100.0f;
             pstRt->ucMagUpdated = 1;
             break;
         }
         case ATK_MS901M_FRAME_ID_BARO:
         {
-            pstRt->stBaro.pressure = (int32_t)(pstFrame->dat[3] << 24) | ((int32_t)pstFrame->dat[2] << 16) | ((int32_t)pstFrame->dat[1] << 8) | pstFrame->dat[0];
-            pstRt->stBaro.altitude = (int32_t)(pstFrame->dat[7] << 24) | ((int32_t)pstFrame->dat[6] << 16) | ((int32_t)pstFrame->dat[5] << 8) | pstFrame->dat[4];
-            pstRt->stBaro.temperature = (float)((int16_t)(pstFrame->dat[9] << 8) | pstFrame->dat[8]) / 100.0f;
+            pstRt->stDeviceParam.stBaro.pressure = (int32_t)((uint32_t)pstFrame->dat[3] << 24) | ((uint32_t)pstFrame->dat[2] << 16) | ((uint32_t)pstFrame->dat[1] << 8) | pstFrame->dat[0];
+            pstRt->stDeviceParam.stBaro.altitude = (int32_t)((uint32_t)pstFrame->dat[7] << 24) | ((uint32_t)pstFrame->dat[6] << 16) | ((uint32_t)pstFrame->dat[5] << 8) | pstFrame->dat[4];
+            pstRt->stDeviceParam.stBaro.temperature = (float)((int16_t)(pstFrame->dat[9] << 8) | pstFrame->dat[8]) / 100.0f;
             pstRt->ucBaroUpdated = 1;
             break;
         }
         case ATK_MS901M_FRAME_ID_PORT:
         {
-            pstRt->stPort.d0 = (uint16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0];
-            pstRt->stPort.d1 = (uint16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2];
-            pstRt->stPort.d2 = (uint16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4];
-            pstRt->stPort.d3 = (uint16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6];
+            pstRt->stDeviceParam.stPort.d0 = (uint16_t)(pstFrame->dat[1] << 8) | pstFrame->dat[0];
+            pstRt->stDeviceParam.stPort.d1 = (uint16_t)(pstFrame->dat[3] << 8) | pstFrame->dat[2];
+            pstRt->stDeviceParam.stPort.d2 = (uint16_t)(pstFrame->dat[5] << 8) | pstFrame->dat[4];
+            pstRt->stDeviceParam.stPort.d3 = (uint16_t)(pstFrame->dat[7] << 8) | pstFrame->dat[6];
             pstRt->ucPortUpdated = 1;
             break;
         }
@@ -349,11 +353,26 @@ void atk_ms901m_stop_streaming(emAtkMs901mDevNumTdf emDevNum)
     memset(&g_astRuntime[emDevNum], 0, sizeof(atk_ms901m_runtime_t));
 }
 
+/**
+ * @brief  获取设备参数只读指针
+ * @param  emDevNum: ATK-MS901M 设备号
+ * @return 设备参数只读指针，emDevNum 越界返回 NULL
+ * @note   流式模式下，缓存数据由 ISR 上下文自动更新
+ */
+const stAtkMs901mDeviceParamTdf *c_pstGetAtkMs901mDeviceParam(emAtkMs901mDevNumTdf emDevNum)
+{
+    if (emDevNum >= ATK_MS901M_DEV_NUM)
+    {
+        return NULL;
+    }
+    return &g_astRuntime[emDevNum].stDeviceParam;
+}
+
 uint8_t atk_ms901m_read_attitude(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_attitude_data_t *attitude_dat)
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || attitude_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(attitude_dat, &g_astRuntime[emDevNum].stAttitude, sizeof(atk_ms901m_attitude_data_t));
+    memcpy(attitude_dat, &g_astRuntime[emDevNum].stDeviceParam.stAttitude, sizeof(atk_ms901m_attitude_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -361,7 +380,7 @@ uint8_t atk_ms901m_read_quaternion(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_qua
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || quaternion_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(quaternion_dat, &g_astRuntime[emDevNum].stQuaternion, sizeof(atk_ms901m_quaternion_data_t));
+    memcpy(quaternion_dat, &g_astRuntime[emDevNum].stDeviceParam.stQuaternion, sizeof(atk_ms901m_quaternion_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -369,7 +388,7 @@ uint8_t atk_ms901m_read_gyro(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_gyro_data
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || gyro_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(gyro_dat, &g_astRuntime[emDevNum].stGyro, sizeof(atk_ms901m_gyro_data_t));
+    memcpy(gyro_dat, &g_astRuntime[emDevNum].stDeviceParam.stGyro, sizeof(atk_ms901m_gyro_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -377,7 +396,7 @@ uint8_t atk_ms901m_read_accelerometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || accelerometer_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(accelerometer_dat, &g_astRuntime[emDevNum].stAccel, sizeof(atk_ms901m_accelerometer_data_t));
+    memcpy(accelerometer_dat, &g_astRuntime[emDevNum].stDeviceParam.stAccel, sizeof(atk_ms901m_accelerometer_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -385,7 +404,7 @@ uint8_t atk_ms901m_read_magnetometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_m
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || magnetometer_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(magnetometer_dat, &g_astRuntime[emDevNum].stMag, sizeof(atk_ms901m_magnetometer_data_t));
+    memcpy(magnetometer_dat, &g_astRuntime[emDevNum].stDeviceParam.stMag, sizeof(atk_ms901m_magnetometer_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -393,7 +412,7 @@ uint8_t atk_ms901m_read_barometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_baro
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || barometer_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(barometer_dat, &g_astRuntime[emDevNum].stBaro, sizeof(atk_ms901m_barometer_data_t));
+    memcpy(barometer_dat, &g_astRuntime[emDevNum].stDeviceParam.stBaro, sizeof(atk_ms901m_barometer_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -401,7 +420,7 @@ uint8_t atk_ms901m_read_port(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_port_data
 {
     if (emDevNum >= ATK_MS901M_DEV_NUM || port_dat == NULL || !g_astRuntime[emDevNum].ucOnline)
     { return ATK_MS901M_ERROR; }
-    memcpy(port_dat, &g_astRuntime[emDevNum].stPort, sizeof(atk_ms901m_port_data_t));
+    memcpy(port_dat, &g_astRuntime[emDevNum].stDeviceParam.stPort, sizeof(atk_ms901m_port_data_t));
     return ATK_MS901M_EOK;
 }
 
@@ -588,11 +607,15 @@ uint8_t atk_ms901m_read_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t 
         return 0;
     }
 
-    for (dat_index = 0; dat_index < frame.len; dat_index++)
     {
-        dat[dat_index] = frame.dat[dat_index];
+        uint8_t ucCopyLen = frame.len;
+        if (ucCopyLen > ATK_MS901M_FRAME_DAT_MAX_SIZE) ucCopyLen = ATK_MS901M_FRAME_DAT_MAX_SIZE;
+        for (dat_index = 0; dat_index < ucCopyLen; dat_index++)
+        {
+            dat[dat_index] = frame.dat[dat_index];
+        }
+        return ucCopyLen;
     }
-    return frame.len;
 }
 
 uint8_t atk_ms901m_write_reg_by_id(emUartDevNumTdf emDevNum, uint8_t id, uint8_t len, uint8_t *dat)
@@ -734,33 +757,8 @@ uint8_t atk_ms901m_get_gyro_accelerometer(emUartDevNumTdf emDevNum, atk_ms901m_g
     ret = atk_ms901m_get_frame_by_id(emDevNum, &frame, ATK_MS901M_FRAME_ID_GYRO_ACCE, ATK_MS901M_FRAME_ID_TYPE_UPLOAD, timeout);
     if (ret != ATK_MS901M_EOK) { return ATK_MS901M_ERROR; }
 
-    if (gyro_dat != NULL && g_stBlockingFsr.ucGyroFsr < 4)
-    {
-        int16_t i16Raw;
-        i16Raw = (int16_t)(frame.dat[7] << 8) | frame.dat[6];
-        gyro_dat->raw.x = i16Raw;
-        gyro_dat->x = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[g_stBlockingFsr.ucGyroFsr];
-        i16Raw = (int16_t)(frame.dat[9] << 8) | frame.dat[8];
-        gyro_dat->raw.y = i16Raw;
-        gyro_dat->y = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[g_stBlockingFsr.ucGyroFsr];
-        i16Raw = (int16_t)(frame.dat[11] << 8) | frame.dat[10];
-        gyro_dat->raw.z = i16Raw;
-        gyro_dat->z = (float)i16Raw / 32768.0f * (float)g_au16GyroFsrTable[g_stBlockingFsr.ucGyroFsr];
-    }
-
-    if (accelerometer_dat != NULL && g_stBlockingFsr.ucAccelFsr < 4)
-    {
-        int16_t i16Raw;
-        i16Raw = (int16_t)(frame.dat[1] << 8) | frame.dat[0];
-        accelerometer_dat->raw.x = i16Raw;
-        accelerometer_dat->x = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[g_stBlockingFsr.ucAccelFsr];
-        i16Raw = (int16_t)(frame.dat[3] << 8) | frame.dat[2];
-        accelerometer_dat->raw.y = i16Raw;
-        accelerometer_dat->y = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[g_stBlockingFsr.ucAccelFsr];
-        i16Raw = (int16_t)(frame.dat[5] << 8) | frame.dat[4];
-        accelerometer_dat->raw.z = i16Raw;
-        accelerometer_dat->z = (float)i16Raw / 32768.0f * (float)g_au8AccelFsrTable[g_stBlockingFsr.ucAccelFsr];
-    }
+    vAtkMs901mDecodeGyroAccel(frame.dat, g_stBlockingFsr.ucGyroFsr, g_stBlockingFsr.ucAccelFsr,
+                               gyro_dat, accelerometer_dat);
 
     return ATK_MS901M_EOK;
 }
