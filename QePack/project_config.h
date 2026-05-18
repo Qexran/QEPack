@@ -73,9 +73,10 @@ typedef enum
 #define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
 #define UART_TX_QUEUE_MAX_LEN 							256  						// UART 发送队列最大长度，可根据需求调整
 #define UART_TX_BUF_MAX_LEN 							512   						// UART vUartPrintf格式化缓冲区长度
-#define UART_IS_USE_DMA		  							1             				// UART 是否使用DMA传输（正常模式）
+#define UART_IS_USE_DMA		  							0             				// UART 是否使用DMA传输（正常模式）
 #define UART_DEVICE_0                                           emUartDevNum0
 #define UART_DEVICE_1                                           emUartDevNum1
+#define UART_DEVICE_2                                           emUartDevNum2
 
 
 /* OLED 相关 */
@@ -185,7 +186,9 @@ typedef enum
 #define MPU6050_IS_ENABLE                               0                               // MPU6050 模块总开关
 
 /* ATK_MS901M 相关 */
-#define ATK_MS901M_IS_ENABLE                            0                               // ATK_MS901M 模块总开关
+#define ATK_MS901M_IS_ENABLE                            1                               // ATK_MS901M 模块总开关
+#define ATK_MS901M_DEV_NUM                              1                               // W25Q64 设备数量
+#define ATK_MS901M0                                     emAtkMs901mDevNum0                               // W25Q64 设备数量
 
 /* W25Q64 Flash 相关 */
 #define W25Q64_IS_ENABLE                                0                               // W25Q64 模块总开关

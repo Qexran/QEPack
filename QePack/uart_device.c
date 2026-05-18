@@ -64,8 +64,31 @@ void vUartDeviceInit(stUartStaticParamTdf *pstInit, emUartDevNumTdf emDevNum)
         );
     #else
         #if (QEPACK_PLATFORM == TI)
-            NVIC_ClearPendingIRQ(pstStatic->pstUartHandle->int_irqn); // 清除 UART 中断挂起标志
-            NVIC_EnableIRQ(pstStatic->pstUartHandle->int_irqn);       // 使能 UART 中断
+            /*
+             * 清理 UART 初始化期间因 RX 引脚上已有数据流而产生的错误状态。
+             * 场景：传感器上电即持续发送数据（如 ATK-MS901M），MCU 在
+             * SYSCFG_DL_init() 中复位/配置 UART 期间，RX 引脚上已有数据，
+             * UART 硬件在未完全配好时采样到不完整字节，导致帧错误/噪声错误
+             * /溢出错误等，这些残留状态会阻塞后续正常接收。
+             */
+            {
+                volatile uint32_t ulSafetyCnt;
+                /* 1. 排空 RX FIFO 残留数据 */
+                ulSafetyCnt = UART_BUF_MAX_LEN;
+                while (ulSafetyCnt-- && !DL_UART_isRXFIFOEmpty(pstStatic->pstUartHandle->uart_inst)) {
+                    DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
+                }
+                /* 2. 清除所有 UART 外设端挂起的中断标志（读取 IIDX 即自动清除） */
+                ulSafetyCnt = 32;
+                while (ulSafetyCnt--) {
+                    if (DL_UART_Main_getPendingInterrupt(pstStatic->pstUartHandle->uart_inst)
+                        == DL_UART_MAIN_IIDX_NO_INTERRUPT) {
+                        break;
+                    }
+                }
+            }
+            NVIC_ClearPendingIRQ(pstStatic->pstUartHandle->int_irqn);
+            NVIC_EnableIRQ(pstStatic->pstUartHandle->int_irqn);
         #else
             HAL_UART_Receive_IT(
                 pstInit->pstUartHandle,
@@ -552,25 +575,27 @@ void vUartUpdateBuffer(emUartDevNumTdf emDevNum){
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
 
+#if (QEPACK_PLATFORM == TI)
+    // 一次性排空 RX FIFO，避免在阻塞式 TX 期间 FIFO 溢出导致错误中断抢占 RX 中断
+    while (!DL_UART_isRXFIFOEmpty(pstStatic->pstUartHandle->uart_inst)) {
+        uint8_t ucData = DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
+
+        if (pstRunning->stUartTempBuffer.count < UART_BUF_MAX_LEN) {
+            pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head] = ucData;
+            pstRunning->stUartTempBuffer.head = (pstRunning->stUartTempBuffer.head + 1) % UART_BUF_MAX_LEN;
+            pstRunning->stUartTempBuffer.count++;
+            pstRunning->ulRxCount++;
+        }
+        // 若环形缓冲区已满，数据已被读取并丢弃（但 FIFO 被清空，避免溢出）
+    }
+#else
     if (pstRunning->stUartTempBuffer.count < UART_BUF_MAX_LEN) {
-    #if (QEPACK_PLATFORM == TI)
-        pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head] =
-        DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
-    #endif
         pstRunning->stUartTempBuffer.head = (pstRunning->stUartTempBuffer.head + 1) % UART_BUF_MAX_LEN;
         pstRunning->stUartTempBuffer.count++;
-        pstRunning->ulRxCount++; // 统计接收字节总数
+        pstRunning->ulRxCount++;
     }
-    #if (QEPACK_PLATFORM == TI)
-    else {
-        // 缓冲区满，仍需读取数据寄存器以清除中断标志
-        DL_UART_Main_receiveData(pstStatic->pstUartHandle->uart_inst);
-    }
-    #endif
-
-    #if (QEPACK_PLATFORM == ST)
-        HAL_UART_Receive_IT(pstStatic->pstUartHandle, &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head], 1);
-    #endif
+    HAL_UART_Receive_IT(pstStatic->pstUartHandle, &pstRunning->stUartTempBuffer.buffer[pstRunning->stUartTempBuffer.head], 1);
+#endif
 }
 
 #if (QEPACK_PLATFORM == TI)

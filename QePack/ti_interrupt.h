@@ -42,15 +42,34 @@ void Interrupt_Init(void);
 /**
  * @brief UART中断处理函数模板宏
  * @param UART_NAME: UART实例名
+ * @note  循环处理所有待处理的中断源，读取 IIDX 会同时清除该中断标志。
+ *         错误中断（溢出/帧错误/校验错误等）优先级高于 RX 中断，
+ *         若不加处理，会在阻塞式 TX 期间永久抢占 RX 导致接收瘫痪。
  */
 #define CREATE_UART_IRQ_HANDLER(UART_NAME, emDevNum)                                    \
     void UART_NAME##_INST_IRQHandler(void) {                                  \
-        switch (DL_UART_Main_getPendingInterrupt(UART_NAME##_INST)) {         \
-            case DL_UART_MAIN_IIDX_RX:                                        \
-                vUartRxCallBackHandler(emDevNum);                             \
-                break;                                                        \
-            default:                                                          \
-                break;                                                        \
+        DL_UART_IIDX iidx;                                                    \
+        while ((iidx = DL_UART_Main_getPendingInterrupt(UART_NAME##_INST))    \
+               != DL_UART_MAIN_IIDX_NO_INTERRUPT) {                           \
+            switch (iidx) {                                                   \
+                case DL_UART_MAIN_IIDX_RX:                                    \
+                    vUartRxCallBackHandler(emDevNum);                         \
+                    break;                                                    \
+                case DL_UART_MAIN_IIDX_OVERRUN_ERROR:                         \
+                case DL_UART_MAIN_IIDX_BREAK_ERROR:                           \
+                case DL_UART_MAIN_IIDX_PARITY_ERROR:                          \
+                case DL_UART_MAIN_IIDX_FRAMING_ERROR:                         \
+                case DL_UART_MAIN_IIDX_RX_TIMEOUT_ERROR:                      \
+                case DL_UART_MAIN_IIDX_NOISE_ERROR:                           \
+                    /* 读取 RXDATA 以清除错误状态并排空 FIFO，                 \
+                       避免错误反复触发导致 RX 中断永远无法被服务 */            \
+                    while (!DL_UART_isRXFIFOEmpty(UART_NAME##_INST)) {        \
+                        DL_UART_Main_receiveData(UART_NAME##_INST);           \
+                    }                                                         \
+                    break;                                                    \
+                default:                                                      \
+                    break;                                                    \
+            }                                                                 \
         }                                                                     \
     }
 
