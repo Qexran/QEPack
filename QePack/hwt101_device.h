@@ -23,7 +23,7 @@
 #if HWT101_IS_ENABLE
 
 #if (QEPACK_PLATFORM == ST)
-    #include "gpio.h"
+    #include "stm32f1xx_hal.h"
 #else
     #include "ti_platform.h"
 #endif
@@ -87,7 +87,11 @@ typedef struct
 {
     emHwt101ComModeTdf   emComMode;       // 通信模式：UART 或 I2C
     emUartDevNumTdf      emUartDev;       // UART 设备号（UART 模式有效）
-    stI2CTdf            *pstI2cHandle;    // I2C 句柄（I2C 模式有效）
+    #if (QEPACK_PLATFORM == ST)
+        I2C_HandleTypeDef  *pstI2cHandle; // I2C 句柄（I2C 模式有效）
+    #else
+        stI2CTdf          *pstI2cHandle;  // I2C 句柄（I2C 模式有效）
+    #endif
     uint8_t              u8I2cAddr;       // I2C 从机地址（默认 0x50，可设 0x01~0x7F）
 } stHwt101StaticParamTdf;
 
@@ -221,8 +225,8 @@ void vHwt101Save(emHwt101DevNumTdf emDevNum);
 /// @param  emDevNum ：设备号
 void vHwt101SetZero(emHwt101DevNumTdf emDevNum);
 
-/// @brief  启动自动零偏校准
-/// @note   传感器需保持静止约 20s，完成后调用 vHwt101Save 保存
+/// @brief  启动自动零偏校准（通过 CALSW 寄存器）
+/// @note   传感器需保持静止约 20s，校准完成后手动调用 vHwt101Save 保存到 Flash
 /// @param  emDevNum ：设备号
 void vHwt101StartAutoCali(emHwt101DevNumTdf emDevNum);
 
@@ -242,6 +246,285 @@ void vHwt101SetAutoCali(emHwt101DevNumTdf emDevNum, uint8_t ucEnable);
 /// @note   进入时务必保持传感器静止，退出时保存配置
 void vHwt101ManualCali(emHwt101DevNumTdf emDevNum, uint8_t ucStart);
 
+
+/* ============================================================
+ * ======================  使 用 教 程  ========================
+ * ============================================================
+ *
+ * HWT101 是维特智能 (WitMotion) 的 Z 轴陀螺仪 / 角度传感器模块。
+ * 支持 UART (TTL) 和 I2C 两种通信模式，二选一。
+ *
+ * 数据以 Q16.16 定点数存储，通过 arithmetic.h 提供的 fix32_to_float()
+ * 转换为浮点数，或直接用定点数运算。
+ *
+ * ==================== 1. 模块配置 ====================
+ *
+ * 在 project_config.h 中启用模块并配置参数：
+ *
+ *   #define HWT101_IS_ENABLE                    1
+ *   #define HWT101_DEV_NUM                      1
+ *   #define HWT101_I2C_POLL_INTERVAL_MS         10
+ *   #define HWT101_OFFLINE_TIMEOUT_MS           500
+ *   #define HWT101_0                            emHwt101DevNum0
+ *
+ * HWT101_I2C_POLL_INTERVAL_MS — I2C 轮询间隔（仅 I2C 模式），默认 10ms
+ * HWT101_OFFLINE_TIMEOUT_MS   — UART 离线超时时间（仅 UART 模式），默认 500ms
+ *
+ * ==================== 2. UART 模式 ====================
+ *
+ * 2.1 硬件接线
+ *
+ *   传感器引脚         MCU 引脚
+ *   ──────────────────────────
+ *   VCC      →    3.3V / 5V
+ *   GND      →    GND
+ *   TX       →    MCU RX
+ *   RX       →    MCU TX
+ *
+ * 2.2 初始化
+ *
+ *   #include "QEPack.h"
+ *
+ *   void main(void)
+ *   {
+ *       // ... 系统初始化 ...
+ *
+ *       // Step 1: 初始化 UART 设备（传感器默认波特率 115200）
+ *       stUartStaticParamTdf stUart = {
+ *           .emUartDev = emUartDevNum0,
+ *           .ulBaudRate = 115200,
+ *           // ... 其他引脚配置 ...
+ *       };
+ *       vUartDeviceInit(&stUart);
+ *
+ *       // Step 2: 初始化 HWT101
+ *       stHwt101StaticParamTdf stHwt = {
+ *           .emComMode    = emHwt101ComModeUart,
+ *           .emUartDev    = emUartDevNum0,
+ *           .pstI2cHandle = NULL,
+ *           .u8I2cAddr    = 0,
+ *       };
+ *       vHwt101DeviceInit(&stHwt, emHwt101DevNum0);
+ *
+ *       while (1)
+ *       {
+ *           // ... 主循环 ...
+ *       }
+ *   }
+ *
+ * 2.3 UART 模式注意事项
+ *
+ *   - 传感器上电后自动推送数据包，无需主动查询。
+ *   - vHwt101DevicePeriodExecute() 检测数据超时，超过 OFFLINE_TIMEOUT_MS
+ *     未收到数据则标记离线。
+ *   - 写寄存器前必须先调用 vHwt101Unlock() 解锁。
+ *
+ * ==================== 3. I2C 模式 ====================
+ *
+ * 3.1 硬件接线
+ *
+ *   传感器引脚         MCU 引脚
+ *   ──────────────────────────
+ *   VCC      →    3.3V / 5V
+ *   GND      →    GND
+ *   SCL      →    MCU SCL（需 4.7kΩ 上拉）
+ *   SDA      →    MCU SDA（需 4.7kΩ 上拉）
+ *
+ * 3.2 TI 平台初始化
+
+ *   #include "QEPack.h"
+ *
+ *   stI2CTdf stI2c;
+ *
+ *   void main(void)
+ *   {
+ *       // ... 系统初始化 ...
+ *
+ *       // Step 1: 初始化 I2C（默认地址 0x50）
+ *       TI_GET_I2C_STRUCTURE(&stI2c, I2C_0_INST, 0);
+ *       vTI_I2C_Init(&stI2c, 400000);  // 400KHz
+ *
+ *       // Step 2: 初始化 HWT101
+ *       stHwt101StaticParamTdf stHwt = {
+ *           .emComMode    = emHwt101ComModeI2C,
+ *           .emUartDev    = emUartDevNum0,
+ *           .pstI2cHandle = &stI2c,
+ *           .u8I2cAddr    = 0x50,
+ *       };
+ *       vHwt101DeviceInit(&stHwt, emHwt101DevNum0);
+ *
+ *       while (1)
+ *       {
+ *           vHwt101DevicePeriodExecute(emHwt101DevNum0);
+ *           // ... 其他业务逻辑 ...
+ *       }
+ *   }
+ *
+ * 3.3 STM32 平台初始化
+ *
+ *   #include "QEPack.h"
+ *
+ *   I2C_HandleTypeDef hi2c1;
+ *
+ *   void main(void)
+ *   {
+ *       // ... 系统初始化（HAL_I2C_Init 配置 hi2c1）...
+ *
+ *       stHwt101StaticParamTdf stHwt = {
+ *           .emComMode    = emHwt101ComModeI2C,
+ *           .emUartDev    = emUartDevNum0,
+ *           .pstI2cHandle = &hi2c1,
+ *           .u8I2cAddr    = 0x50,
+ *       };
+ *       vHwt101DeviceInit(&stHwt, emHwt101DevNum0);
+ *
+ *       while (1)
+ *       {
+ *           vHwt101DevicePeriodExecute(emHwt101DevNum0);
+ *           // ... 其他业务逻辑 ...
+ *       }
+ *   }
+ *
+ * 3.4 I2C 模式注意事项
+ *
+ *   - I2C 模式采用分时轮询：先读 GZ (角速度)，再读 Yaw (角度)，
+ *     每次间隔 HWT101_I2C_POLL_INTERVAL_MS ms。
+ *   - vHwt101DevicePeriodExecute() 不能放在中断中调用（I2C 操作可能阻塞）。
+ *
+ * ==================== 4. 周期执行 ====================
+ *
+ * UART 模式：vHwt101DevicePeriodExecute() 检测离线超时，可放 ISR 中。
+ * I2C  模式：vHwt101DevicePeriodExecute() 执行 I2C 轮询读数，放在 main 循环。
+ *
+ *   // 方式 A: 在 main 循环中调用（UART / I2C 均可）
+ *   while (1)
+ *   {
+ *       vHwt101DevicePeriodExecute(emHwt101DevNum0);
+ *   }
+ *
+ *   // 方式 B: 在 1ms 定时器 ISR 中调用（仅 UART 模式）
+ *   void TIMER_IRQHandler(void)
+ *   {
+ *       vHwt101DevicePeriodExecute(emHwt101DevNum0);
+ *   }
+ *
+ * ==================== 5. 读取数据 ====================
+ *
+ * 5.1 获取角度和角速度
+ *
+ *   fix32_t s32Angle = s32Hwt101GetAngleZ(emHwt101DevNum0);
+ *   fix32_t s32Vel   = s32Hwt101GetAngularVelZ(emHwt101DevNum0);
+ *
+ *   // 转为浮点数
+ *   float fAngle = fix32_to_float(s32Angle);  // 单位: °
+ *   float fVel   = fix32_to_float(s32Vel);    // 单位: °/s
+ *
+ *   // 或直接用定点数比较 / 运算（不依赖浮点）
+ *   if (fix32_abs(s32Angle) > fix32_from_float(90.0f))
+ *   {
+ *       // 角度超过 90°
+ *   }
+ *
+ * 5.2 检查数据更新
+ *
+ *   uint8_t u8Flags = u8Hwt101GetDataFlags(emHwt101DevNum0);
+ *   if (u8Flags & HWT101_DATA_ANGLE_UPDATE)
+ *   {
+ *       // 有新的角度数据到达
+ *       fix32_t s32Angle = s32Hwt101GetAngleZ(emHwt101DevNum0);
+ *   }
+ *   if (u8Flags & HWT101_DATA_GYRO_UPDATE)
+ *   {
+ *       // 有新的角速度数据到达
+ *   }
+ *
+ *   注意：u8Hwt101GetDataFlags() 读取后自动清除标志位。
+ *
+ * 5.3 检查传感器在线状态
+ *
+ *   if (u8Hwt101IsOnline(emHwt101DevNum0))
+ *   {
+ *       // 传感器在线
+ *   }
+ *   else
+ *   {
+ *       // 传感器离线，检查接线
+ *   }
+ *
+ * ==================== 6. 常用控制命令 ====================
+ *
+ * 6.1 Z 轴角度归零（"一键归零"，约 700ms）
+ *
+ *   vHwt101SetZero(emHwt101DevNum0);
+ *   // 内部已包含 解锁 → 写 CALIYAW → 保存，延时约 700ms
+ *
+ * 6.2 设置输出速率
+ *
+ *   vHwt101SetOutputRate(emHwt101DevNum0, emHwt101Rate50Hz);  // 50Hz
+ *
+ * 6.3 自动零偏校准（传感器需静止约 20s，完成后需手动保存）
+ *
+ *   vHwt101StartAutoCali(emHwt101DevNum0);
+ *   HAL_Delay(20000);                      // 等待 20s（TI 平台用 TI_Delay）
+ *   vHwt101Save(emHwt101DevNum0);          // 保存校准结果到 Flash
+ *
+ * 6.4 关闭自动校准（减少运动中漂移）
+ *
+ *   vHwt101SetAutoCali(emHwt101DevNum0, 1);  // 1 = 关闭自动校准
+ *
+ * 6.5 手动零偏校准
+ *
+ *   vHwt101ManualCali(emHwt101DevNum0, 1);  // 进入校准（传感器需保持静止）
+ *   HAL_Delay(10000);                       // 等待 10s（TI 平台用 TI_Delay）
+ *   vHwt101ManualCali(emHwt101DevNum0, 0);  // 退出校准
+ *   vHwt101Save(emHwt101DevNum0);           // 保存
+ *
+ * ==================== 7. 寄存器读写（高级） ====================
+ *
+ *   int16_t s16Val;
+ *   emHwt101ReadReg(emHwt101DevNum0, 0x2E, &s16Val);  // 读版本号寄存器
+ *
+ *   vHwt101Unlock(emHwt101DevNum0);
+ *   emHwt101WriteReg(emHwt101DevNum0, 0x03, 0x0005);  // 写 RRATE 寄存器
+ *   vHwt101Save(emHwt101DevNum0);
+ *
+ * ==================== 8. 完整示例 (UART 模式) ====================
+ *
+ *   #include "QEPack.h"
+ *
+ *   void main(void)
+ *   {
+ *       // 系统初始化 ...
+ *
+ *       stUartStaticParamTdf stUart = { ... };
+ *       vUartDeviceInit(&stUart);
+ *
+ *       stHwt101StaticParamTdf stHwt = {
+ *           .emComMode = emHwt101ComModeUart,
+ *           .emUartDev = emUartDevNum0,
+ *       };
+ *       vHwt101DeviceInit(&stHwt, emHwt101DevNum0);
+ *
+ *       // 设置输出速率为 50Hz
+ *       vHwt101SetOutputRate(emHwt101DevNum0, emHwt101Rate50Hz);
+ *
+ *       while (1)
+ *       {
+ *           vHwt101DevicePeriodExecute(emHwt101DevNum0);
+ *
+ *           if (u8Hwt101IsOnline(emHwt101DevNum0))
+ *           {
+ *               uint8_t u8Flags = u8Hwt101GetDataFlags(emHwt101DevNum0);
+ *               if (u8Flags & HWT101_DATA_ANGLE_UPDATE)
+ *               {
+ *                   fix32_t s32Angle = s32Hwt101GetAngleZ(emHwt101DevNum0);
+ *                   float fAngle = fix32_to_float(s32Angle);
+ *                   // fAngle 即为当前 Z 轴偏航角 (°)
+ *               }
+ *           }
+ *       }
+ *   }
+ */
 
 #endif
 #endif

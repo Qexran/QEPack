@@ -21,9 +21,13 @@
 
 /** @brief 传感器类型枚举 */
 typedef enum {
-    emSensorTypeGyro = 0,    /* 陀螺仪 */
-    emSensorTypeGray,        /* 灰度传感器 */
-    emSensorTypeCCD,         /* 线性CCD */
+    emSensorTypeMPU6050Gyro = 0,    /* MPU6050 陀螺仪 */
+    emSensorTypeAtkMs901MGyro ,     /* ATK901M 陀螺仪 */
+    emSensorType660RBGyro,          /* 660RB 陀螺仪 */
+    emSensorTypeNBO08XGyro,         /* NBO08X 陀螺仪 */
+    emSensorTypeHWT101Gyro,         /* HWT101 陀螺仪 */
+    emSensorTypeGray,               /* 灰度传感器 */
+    emSensorTypeCCD,                /* 线性CCD */
 } emSensorTypeTdf;
 
 /** @brief 传感器设备号枚举 */
