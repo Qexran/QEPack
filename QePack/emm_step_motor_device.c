@@ -37,6 +37,11 @@ static void vEmmMotorSendCmd(
     aucCmd[ucIndex++] = EMM_MOTOR_CMD_END_MARK;
     
     vUartSendArray(pstEmmMotor->stStaticParam.emUartDevNum, aucCmd, ucIndex);
+    #if (QEPACK_PLATFORM == ST)
+        HAL_Delay(10);
+    #else
+        TI_Delay(10);
+    #endif
 }
 
 /**

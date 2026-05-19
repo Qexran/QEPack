@@ -82,10 +82,10 @@ void TIMG0_IRQHandler(void)
     __BKPT();
 }
 
-void TIMA0_IRQHandler(void)
-{
-    __BKPT();
-}
+// void TIMA0_IRQHandler(void)
+// {
+//     __BKPT();
+// }
 
 void TIMG12_IRQHandler(void)
 {

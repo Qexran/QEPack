@@ -224,6 +224,13 @@ typedef enum
 #define TIMER0                                          emTimerDevNum0
 
 
+/* HWT101 Z轴陀螺仪 相关 */
+#define HWT101_IS_ENABLE                               1                               // HWT101 模块总开关
+#define HWT101_DEV_NUM                                 1                               // HWT101 设备数量
+#define HWT101_I2C_POLL_INTERVAL_MS                    10                              // I2C 轮询间隔(ms)
+#define HWT101_OFFLINE_TIMEOUT_MS                      500                             // 离线超时(ms)
+#define HWT101_0                                        emHwt101DevNum0
+
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关
 #define STEP_M_MAX_STEP_NUM                             20                              // 最大步骤数量

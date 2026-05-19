@@ -58,6 +58,10 @@
     #include "imu660rb_device.h"
 #endif
 
+#if HWT101_IS_ENABLE
+    #include "hwt101_device.h"
+#endif
+
 #if ATK_MS901M_IS_ENABLE
     #include "atk_ms901m_device.h"
 #endif
@@ -124,6 +128,22 @@
         .uart_inst         = UART_NAME##_INST, \
         .int_irqn          = UART_NAME##_INST_INT_IRQN, \
     }
+
+#if UART_IS_USE_DMA
+/* DMA 版 UART 结构宏 — 需在 SysConfig 中额外配置 DMA 通道（见 uart_device.h 注释） */
+#define TI_GET_UART_STRUCTURE_DMA(UART_NAME, DMA_RX_CH_NAME, DMA_TX_CH_NAME) \
+    (stUartTdf){ \
+        .uart_inst         = UART_NAME##_INST, \
+        .int_irqn          = UART_NAME##_INST_INT_IRQN, \
+        .dma_rx_channel    = DMA_RX_CH_NAME##_CHAN_ID, \
+        .dma_tx_channel    = DMA_TX_CH_NAME##_CHAN_ID, \
+        .dma_rx_trigger    = TI_GetUartDmaRxTrigger(UART_NAME##_INST), \
+        .dma_tx_trigger    = TI_GetUartDmaTxTrigger(UART_NAME##_INST), \
+    }
+
+uint32_t TI_GetUartDmaRxTrigger(UART_Regs *uart_inst);
+uint32_t TI_GetUartDmaTxTrigger(UART_Regs *uart_inst);
+#endif
 
 #define TI_GET_ADC_STRUCTURE(ADC_NAME) \
     (stAdcTdf){ \

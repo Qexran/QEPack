@@ -116,7 +116,7 @@ static void i2c_sda_unlock(
 
 /**
  * @brief 向I2C设备写入内存
- * 
+ *
  * @param pstIdf I2C配置结构体指针
  * @param DevAddress 设备地址
  * @param MemAddress 内存地址
@@ -134,7 +134,7 @@ void TI_I2C_Mem_Write(
     unsigned long start, cur;
     /*
         原函数信息
-        I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint16_t MemAddress, 
+        I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint16_t MemAddress,
         uint16_t MemAddSize, uint8_t *pData, uint16_t Size, uint32_t Timeout
     */
     for(uint16_t i = 0;i < Size; i++){
@@ -162,6 +162,69 @@ void TI_I2C_Mem_Write(
             }
         }
     }
+}
+
+/**
+ * @brief 从I2C设备读取内存
+ *
+ * @param pstIdf I2C配置结构体指针
+ * @param DevAddress 设备地址
+ * @param MemAddress 内存地址
+ * @param pData 数据指针（输出）
+ * @param Size 读取大小
+ * @param Timeout 超时时间
+ * @return QE_StatusTypeDef QE_OK 成功，QE_TIMEOUT 超时
+ *
+ * I2C 读时序：START + DevAddr(W) + RegAddr → RESTART + DevAddr(R) + Read N bytes + STOP
+ */
+QE_StatusTypeDef TI_I2C_Mem_Read(
+    stI2CTdf *pstIdf,
+    uint8_t DevAddress, uint8_t MemAddress,
+    uint8_t *pData, uint16_t Size, uint32_t Timeout
+)
+{
+    unsigned long start, cur;
+
+    /* 第一阶段：写寄存器地址（TX 方向，1 字节） */
+    DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst, &MemAddress, 1);
+    DL_I2C_clearInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
+    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress, DL_I2C_CONTROLLER_DIRECTION_TX, 1);
+
+    mspm0_get_clock_ms(&start);
+    while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE))
+    {
+        mspm0_get_clock_ms(&cur);
+        if((cur - start) >= Timeout)
+        {
+            i2c_sda_unlock(pstIdf);
+            return QE_TIMEOUT;
+        }
+    }
+
+    /* 第二阶段：读取数据（RX 方向，Size 字节） */
+    DL_I2C_clearInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_RX_DONE);
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
+    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress, DL_I2C_CONTROLLER_DIRECTION_RX, Size);
+
+    mspm0_get_clock_ms(&start);
+    while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_RX_DONE))
+    {
+        mspm0_get_clock_ms(&cur);
+        if((cur - start) >= Timeout)
+        {
+            i2c_sda_unlock(pstIdf);
+            return QE_TIMEOUT;
+        }
+    }
+
+    /* 从 RX FIFO 读取数据 */
+    for (uint16_t i = 0; i < Size; i++)
+    {
+        pData[i] = DL_I2C_receiveControllerData(pstIdf->i2c_inst);
+    }
+
+    return QE_OK;
 }
 
 /**
@@ -307,6 +370,32 @@ void vTiClearFlashDebris(void)
     // 7. 恢复全局中断
     __enable_irq();
 }
+
+#if UART_IS_USE_DMA
+/**
+ * @brief  根据 UART 外设基址查找对应的 DMA RX 触发源
+ */
+uint32_t TI_GetUartDmaRxTrigger(UART_Regs *uart_inst)
+{
+    if (uart_inst == UART0) return DMA_UART0_RX_TRIG;
+    if (uart_inst == UART1) return DMA_UART1_RX_TRIG;
+    if (uart_inst == UART2) return DMA_UART2_RX_TRIG;
+    if (uart_inst == UART3) return DMA_UART3_RX_TRIG;
+    return 0;
+}
+
+/**
+ * @brief  根据 UART 外设基址查找对应的 DMA TX 触发源
+ */
+uint32_t TI_GetUartDmaTxTrigger(UART_Regs *uart_inst)
+{
+    if (uart_inst == UART0) return DMA_UART0_TX_TRIG;
+    if (uart_inst == UART1) return DMA_UART1_TX_TRIG;
+    if (uart_inst == UART2) return DMA_UART2_TX_TRIG;
+    if (uart_inst == UART3) return DMA_UART3_TX_TRIG;
+    return 0;
+}
+#endif
 
 
 #endif
