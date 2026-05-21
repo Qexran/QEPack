@@ -199,9 +199,9 @@ fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNum
     stSensorDeviceTdf *pstA = pstSensorGetDevice(emDevNumA);
     stSensorDeviceTdf *pstB = pstSensorGetDevice(emDevNumB);
 
-    uint8_t bAValid = (pstA != NULL && pstA->ucEnable && pstA->pstVTable != NULL
+    uint8_t bAValid = (pstA != NULL && pstA->pstVTable != NULL
                        && pstA->pstVTable->fGetValue != NULL);
-    uint8_t bBValid = (pstB != NULL && pstB->ucEnable && pstB->pstVTable != NULL
+    uint8_t bBValid = (pstB != NULL && pstB->pstVTable != NULL
                        && pstB->pstVTable->fGetValue != NULL);
 
     if (!bAValid && !bBValid) return FIX32_ZERO;

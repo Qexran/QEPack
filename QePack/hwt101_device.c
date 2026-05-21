@@ -616,6 +616,10 @@ void vHwt101PeriodExecute(void *pstSensor)
                     pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
                     pRunning->u8IsOnline = 1;
                 }
+                else
+                {
+                    pRunning->u8IsOnline = 0;
+                }
                 break;
             }
 
@@ -644,8 +648,9 @@ void vHwt101Reset(void *pstSensor)
 
     emSensorDevNumTdf emSensorDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucLocalIdx);
     vHwt101SetZero(emSensorDev);
+    pstHwt->stRunningParam.s32AngleZ    = FIX32_ZERO;
     pstHwt->stRunningParam.fTargetValue = FIX32_ZERO;
-    pstHwt->stRunningParam.fLastAngleZ = FIX32_ZERO;
+    pstHwt->stRunningParam.fLastAngleZ  = FIX32_ZERO;
     pstHwt->stRunningParam.lTurnCount   = 0;
 }
 
