@@ -97,7 +97,7 @@ void vUltrasonicStartMeasure(emUltrasonicDevNumTdf emDevNum)
     HAL_GPIO_WritePin(pstStatic->pstTrigGpioBase, pstStatic->usTrigGpioPin, GPIO_PIN_RESET);
     
     // 5. 设置超时时间戳
-    pstRunning->ulExpireTime = HAL_GetTick() + pstRunning->ulTimeoutMs;
+    pstRunning->ulExpireTime = QE_GET_TICK() + pstRunning->ulTimeoutMs;
 }
 
 /**
@@ -135,7 +135,7 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
     }
     
     // 1. 检查是否超时
-    if (HAL_GetTick() >= pstRunning->ulExpireTime)
+    if (QE_GET_TICK() >= pstRunning->ulExpireTime)
     {
         // 停止输入捕获
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);

@@ -17,6 +17,7 @@
 #endif
 
 #include "string.h"
+#include "arithmetic.h"
 
 /// @brief          按键设备号枚举
 /// @note 
@@ -182,7 +183,7 @@ int main(void)
             vKeyClearEvent(KEY0); // 清除事件标志
         }
         
-        HAL_Delay(1); // 模拟1ms周期
+        QE_DELAY(1); // 模拟1ms周期
     }
 }
 

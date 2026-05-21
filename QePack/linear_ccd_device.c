@@ -379,4 +379,94 @@ uint16_t usLinerCcdGetThreshold(emLinerCcdDevNumTdf emDevNum)
     }
 #endif
 
+/* ===================== 传感器基类适配 ===================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define CCD_SENSOR_LOCAL_MAX  4
+#define CCD_SENSOR_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensorCCDDevNum0))
+
+typedef struct {
+    stSensorDeviceTdf        stBase;
+    emSensorDevNumTdf        emSensorDevNum;
+    fix32_t                  fTargetValue;
+} stCCDSensorDeviceTdf;
+
+static void vCCDSensorInit(void *pstSensor)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    (void)pstCCD;
+}
+
+static void vCCDSensorPeriodExecute(void *pstSensor)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    emLinerCcdDevNumTdf emCCDDev = (emLinerCcdDevNumTdf)CCD_SENSOR_TO_LOCAL(pstCCD->emSensorDevNum);
+    vLinerCcdReadData(emCCDDev);
+    vLinerCcdCalculateThreshold(emCCDDev);
+    vLinerCcdFindCenterLine(emCCDDev);
+}
+
+static fix32_t fCCDSensorGetValue(void *pstSensor)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    emLinerCcdDevNumTdf emCCDDev = (emLinerCcdDevNumTdf)CCD_SENSOR_TO_LOCAL(pstCCD->emSensorDevNum);
+    return (fix32_t)((int64_t)(sLinerCcdGetCenterLine(emCCDDev)) * 65536);
+}
+
+static void vCCDSensorReset(void *pstSensor)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    pstCCD->fTargetValue = FIX32_ZERO;
+}
+
+static void vCCDSensorSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    pstCCD->fTargetValue = fTarget;
+}
+
+static fix32_t fCCDSensorGetTarget(void *pstSensor)
+{
+    stCCDSensorDeviceTdf *pstCCD = (stCCDSensorDeviceTdf *)pstSensor;
+    return pstCCD->fTargetValue;
+}
+
+static stSensorVTableTdf g_stCCDSensorVTable = {
+    vCCDSensorInit,
+    vCCDSensorPeriodExecute,
+    fCCDSensorGetValue,
+    vCCDSensorReset,
+    vCCDSensorSetTarget,
+    fCCDSensorGetTarget,
+};
+
+static stCCDSensorDeviceTdf g_astCCDSensorDevices[CCD_SENSOR_LOCAL_MAX];
+
+void vCCDSensorRegister(emSensorDevNumTdf emSensorDevNum)
+{
+    uint8_t ucLocalIdx = CCD_SENSOR_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= CCD_SENSOR_LOCAL_MAX) {
+        return;
+    }
+
+    stCCDSensorDeviceTdf *pstCCD = &g_astCCDSensorDevices[ucLocalIdx];
+    memset(pstCCD, 0, sizeof(stCCDSensorDeviceTdf));
+
+    pstCCD->stBase.emType = emSensorTypeCCD;
+    pstCCD->stBase.pstVTable = &g_stCCDSensorVTable;
+    pstCCD->stBase.ucEnable = 1;
+    pstCCD->stBase.fWeight = FIX32_ONE;
+    pstCCD->stBase.emPidDevNum     = emNoPid;
+    pstCCD->stBase.usPidPeriodMs   = 0;
+    pstCCD->stBase.ulPidLastTickMs = 0;
+    pstCCD->emSensorDevNum = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstCCD->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
+
 #endif

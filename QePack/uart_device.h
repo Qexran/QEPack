@@ -21,6 +21,7 @@
 #include "stdarg.h"
 #include "string.h"
 #include "stdio.h"
+#include "arithmetic.h"
 
 /// @brief          UART设备号枚举
 typedef enum
@@ -193,7 +194,7 @@ while(1)
     vUartDevicePeriodExecute(UART1); // 处理接收/帧解析
 
     // 检测是否有接收到的帧数据（通过回调函数处理）
-    HAL_Delay(10);
+    QE_DELAY(10);
 }
 */
 

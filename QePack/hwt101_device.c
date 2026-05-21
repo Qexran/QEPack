@@ -1,27 +1,19 @@
 /**
   * @file       hwt101_device.c
   * @author     Qe_xr
-  * @version    V1.0.0
-  * @date       2026/5/19
+  * @version    V3.0.0
+  * @date       2026/5/21
   * @brief      HWT101 Z轴陀螺仪/角度传感器驱动实现
   *
   * 支持 UART (TTL) 和 I2C 两种通信模式。
   * 数据以 Q16.16 定点数存储，无浮点运算依赖。
+  * 继承自 sensor_device 基类，统一使用 emSensorDevNumTdf 管理。
   */
 
 #include "hwt101_device.h"
 #if HWT101_IS_ENABLE
 
-/* 平台相关的时间戳和延时宏 */
-#if (QEPACK_PLATFORM == TI)
-    #define HWT101_GET_TICK()    TI_GetTick()
-    #define HWT101_DELAY(ms)     TI_Delay(ms)
-#else
-    #define HWT101_GET_TICK()    HAL_GetTick()
-    #define HWT101_DELAY(ms)     HAL_Delay(ms)
-#endif
-
-/* 全局设备数组 */
+/* 全局设备数组（以 sensor 设备号偏移为索引） */
 stHwt101DeviceParamTdf gastHwt101DeviceParam[HWT101_DEV_NUM];
 
 
@@ -59,9 +51,18 @@ stHwt101DeviceParamTdf gastHwt101DeviceParam[HWT101_DEV_NUM];
 /* ==================== 内部辅助函数 ==================== */
 
 /**
- * @brief 通过 UART 设备号查找对应的 HWT101 设备号
+ * @brief sensor 设备号转数组索引
  */
-static emHwt101DevNumTdf emHwt101FindByUartDev(emUartDevNumTdf emUartDev)
+static uint8_t u8Hwt101GetLocalIdx(emSensorDevNumTdf emSensorDevNum)
+{
+    return (uint8_t)(emSensorDevNum - emSensorHWT101DevNum0);
+}
+
+
+/**
+ * @brief 通过 UART 设备号查找对应的 sensor 设备号
+ */
+static emSensorDevNumTdf emHwt101FindByUartDev(emUartDevNumTdf emUartDev)
 {
     uint8_t i;
     for (i = 0; i < HWT101_DEV_NUM; i++)
@@ -69,17 +70,17 @@ static emHwt101DevNumTdf emHwt101FindByUartDev(emUartDevNumTdf emUartDev)
         if (gastHwt101DeviceParam[i].stStaticParam.emComMode == emHwt101ComModeUart
             && gastHwt101DeviceParam[i].stStaticParam.emUartDev == emUartDev)
         {
-            return (emHwt101DevNumTdf)i;
+            return (emSensorDevNumTdf)(emSensorHWT101DevNum0 + i);
         }
     }
-    return (emHwt101DevNumTdf)HWT101_DEV_NUM;
+    return emNoSensor;
 }
 
 
 /**
  * @brief UART 模式：发送 5 字节命令
  */
-static void vHwt101UartSendCmd(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16_t s16Data)
+static void vHwt101UartSendCmd(uint8_t ucLocalIdx, uint8_t u8Addr, int16_t s16Data)
 {
     uint8_t aucCmd[5];
     aucCmd[0] = HWT101_CMD_HEADER1;
@@ -87,14 +88,14 @@ static void vHwt101UartSendCmd(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16
     aucCmd[2] = u8Addr;
     aucCmd[3] = (uint8_t)(s16Data & 0xFF);
     aucCmd[4] = (uint8_t)((s16Data >> 8) & 0xFF);
-    vUartSendArray(gastHwt101DeviceParam[emDevNum].stStaticParam.emUartDev, aucCmd, 5);
+    vUartSendArray(gastHwt101DeviceParam[ucLocalIdx].stStaticParam.emUartDev, aucCmd, 5);
 }
 
 
 /**
  * @brief UART 模式：发送读寄存器命令（通过 READADDR 0x27）
  */
-static void vHwt101UartReadCmd(emHwt101DevNumTdf emDevNum, uint8_t u8Addr)
+static void vHwt101UartReadCmd(uint8_t ucLocalIdx, uint8_t u8Addr)
 {
     uint8_t aucCmd[5];
     aucCmd[0] = HWT101_CMD_HEADER1;
@@ -102,73 +103,45 @@ static void vHwt101UartReadCmd(emHwt101DevNumTdf emDevNum, uint8_t u8Addr)
     aucCmd[2] = HWT101_REG_READADDR;
     aucCmd[3] = u8Addr;
     aucCmd[4] = 0x00;
-    vUartSendArray(gastHwt101DeviceParam[emDevNum].stStaticParam.emUartDev, aucCmd, 5);
+    vUartSendArray(gastHwt101DeviceParam[ucLocalIdx].stStaticParam.emUartDev, aucCmd, 5);
 }
 
 
 /**
- * @brief I2C 模式：写 2 字节数据到寄存器（单次 I2C 事务）
+ * @brief I2C 模式：写 2 字节数据到寄存器
  */
-#if (QEPACK_PLATFORM == TI)
-static QE_StatusTypeDef emHwt101I2cWriteReg2(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16_t s16Data)
+static QE_StatusTypeDef emHwt101I2cWriteReg2(uint8_t ucLocalIdx, uint8_t u8Addr, int16_t s16Data)
 {
-    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
-    stI2CTdf *pstI2c = pStatic->pstI2cHandle;
-
-    uint8_t aucTx[3];
-    unsigned long start, cur;
-
-    aucTx[0] = u8Addr;
-    aucTx[1] = (uint8_t)(s16Data & 0xFF);
-    aucTx[2] = (uint8_t)((s16Data >> 8) & 0xFF);
-
-    DL_I2C_fillControllerTXFIFO(pstI2c->i2c_inst, aucTx, 3);
-    DL_I2C_clearInterruptStatus(pstI2c->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
-    while (!(DL_I2C_getControllerStatus(pstI2c->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
-    DL_I2C_startControllerTransfer(pstI2c->i2c_inst, pStatic->u8I2cAddr,
-        DL_I2C_CONTROLLER_DIRECTION_TX, 3);
-
-    mspm0_get_clock_ms(&start);
-    while (!DL_I2C_getRawInterruptStatus(pstI2c->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE))
-    {
-        mspm0_get_clock_ms(&cur);
-        if ((cur - start) >= 10)  /* 10ms 超时 */
-        {
-            return QE_TIMEOUT;
-        }
-    }
-    return QE_OK;
-}
-#else
-static QE_StatusTypeDef emHwt101I2cWriteReg2(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16_t s16Data)
-{
-    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
+    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[ucLocalIdx].stStaticParam;
     uint8_t aucTx[2];
     aucTx[0] = (uint8_t)(s16Data & 0xFF);
     aucTx[1] = (uint8_t)((s16Data >> 8) & 0xFF);
+#if (QEPACK_PLATFORM == TI)
+    return TI_I2C_Mem_Write(pStatic->pstI2cHandle, pStatic->u8I2cAddr, u8Addr, aucTx, 2, 10);
+#else
     if (HAL_I2C_Mem_Write(pStatic->pstI2cHandle, (uint16_t)(pStatic->u8I2cAddr << 1),
         u8Addr, I2C_MEMADD_SIZE_8BIT, aucTx, 2, 10) == HAL_OK)
     {
         return QE_OK;
     }
     return QE_ERROR;
-}
 #endif
+}
 
 
 /**
  * @brief I2C 模式：从寄存器读取 2 字节数据
  */
 #if (QEPACK_PLATFORM == TI)
-static QE_StatusTypeDef emHwt101I2cReadReg2(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, uint8_t *pucBuf)
+static QE_StatusTypeDef emHwt101I2cReadReg2(uint8_t ucLocalIdx, uint8_t u8Addr, uint8_t *pucBuf)
 {
-    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
+    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[ucLocalIdx].stStaticParam;
     return TI_I2C_Mem_Read(pStatic->pstI2cHandle, pStatic->u8I2cAddr, u8Addr, pucBuf, 2, 10);
 }
 #else
-static QE_StatusTypeDef emHwt101I2cReadReg2(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, uint8_t *pucBuf)
+static QE_StatusTypeDef emHwt101I2cReadReg2(uint8_t ucLocalIdx, uint8_t u8Addr, uint8_t *pucBuf)
 {
-    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
+    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[ucLocalIdx].stStaticParam;
     if (HAL_I2C_Mem_Read(pStatic->pstI2cHandle, (uint16_t)(pStatic->u8I2cAddr << 1),
         u8Addr, I2C_MEMADD_SIZE_8BIT, pucBuf, 2, 10) == HAL_OK)
     {
@@ -197,9 +170,9 @@ static uint8_t u8Hwt101CalcChecksum(uint8_t *pucData)
 /**
  * @brief 解析完整的 11 字节 UART 数据包并更新运行参数
  */
-static void vHwt101ParsePacket(emHwt101DevNumTdf emDevNum, uint8_t *pucPkt)
+static void vHwt101ParsePacket(uint8_t ucLocalIdx, uint8_t *pucPkt)
 {
-    stHwt101RunningParamTdf *pRunning = &gastHwt101DeviceParam[emDevNum].stRunningParam;
+    stHwt101RunningParamTdf *pRunning = &gastHwt101DeviceParam[ucLocalIdx].stRunningParam;
 
     /* 校验 */
     if (u8Hwt101CalcChecksum(pucPkt) != pucPkt[10])
@@ -211,24 +184,24 @@ static void vHwt101ParsePacket(emHwt101DevNumTdf emDevNum, uint8_t *pucPkt)
     {
         case HWT101_TYPE_GYRO:  /* 角速度包 0x52 */
         {
-            /* 校准角速度 Wz = pucPkt[4] | (pucPkt[5] << 8) */
-            pRunning->s16GzRaw = (int16_t)(pucPkt[4] | ((uint16_t)pucPkt[5] << 8));
+            /* 校准角速度 Wz = pucPkt[6] | (pucPkt[7] << 8)，0.01°/s/LSB */
+            pRunning->s16GzRaw = (int16_t)(pucPkt[6] | ((uint16_t)pucPkt[7] << 8));
             pRunning->s32AngularVelZ = (fix32_t)pRunning->s16GzRaw * 4000;
             pRunning->u8DataFlags |= HWT101_DATA_GYRO_UPDATE;
             pRunning->u8IsOnline = 1;
-            pRunning->u32LastRxTick = HWT101_GET_TICK();
+            pRunning->u32LastRxTick = QE_GET_TICK();
             break;
         }
 
         case HWT101_TYPE_ANGLE:  /* 角度包 0x53 */
         {
-            /* 偏航角 Yaw = pucPkt[6] | (pucPkt[7] << 8) */
+            /* 偏航角 Yaw = pucPkt[6] | (pucPkt[7] << 8)，0.01°/LSB */
             pRunning->s16YawRaw = (int16_t)(pucPkt[6] | ((uint16_t)pucPkt[7] << 8));
             pRunning->s32AngleZ = (fix32_t)pRunning->s16YawRaw * 360;
             pRunning->u16Version = (uint16_t)(pucPkt[8] | ((uint16_t)pucPkt[9] << 8));
             pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
             pRunning->u8IsOnline = 1;
-            pRunning->u32LastRxTick = HWT101_GET_TICK();
+            pRunning->u32LastRxTick = QE_GET_TICK();
             break;
         }
 
@@ -244,132 +217,31 @@ static void vHwt101ParsePacket(emHwt101DevNumTdf emDevNum, uint8_t *pucPkt)
  */
 static void vHwt101UartCallback(emUartDevNumTdf emUartDev, stUartRunningParamTdf *pstUartRunning)
 {
-    emHwt101DevNumTdf emDev = emHwt101FindByUartDev(emUartDev);
-    if (emDev >= (emHwt101DevNumTdf)HWT101_DEV_NUM)
+    emSensorDevNumTdf emSensorDev = emHwt101FindByUartDev(emUartDev);
+    if (emSensorDev == emNoSensor)
     {
         return;
     }
 
     if (pstUartRunning->ulFrameDataCount > 0)
     {
-        vHwt101RxDataInput(emDev, pstUartRunning->aucFrameDataBuf,
+        vHwt101RxDataInput(emSensorDev, pstUartRunning->aucFrameDataBuf,
                            pstUartRunning->ulFrameDataCount);
     }
 }
 
 
-/* ==================== 公共 API ==================== */
-
-/**
- * @brief  HWT101 设备初始化
- */
-void vHwt101DeviceInit(stHwt101StaticParamTdf *pstInit, emHwt101DevNumTdf emDevNum)
-{
-    stHwt101StaticParamTdf  *pStatic;
-    stHwt101RunningParamTdf *pRunning;
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    pStatic  = &gastHwt101DeviceParam[emDevNum].stStaticParam;
-    pRunning = &gastHwt101DeviceParam[emDevNum].stRunningParam;
-
-    /* 拷贝静态参数 */
-    memcpy(pStatic, pstInit, sizeof(stHwt101StaticParamTdf));
-
-    /* 清零运行参数 */
-    memset(pRunning, 0, sizeof(stHwt101RunningParamTdf));
-
-    if (pstInit->emComMode == emHwt101ComModeUart)
-    {
-        /* UART 模式：注册回调到 uart_device */
-        vUartSetCallback(pstInit->emUartDev, vHwt101UartCallback);
-    }
-    /* I2C 模式：无需额外初始化，轮询在 vHwt101DevicePeriodExecute 中进行 */
-}
-
-
-/**
- * @brief  HWT101 周期执行
- */
-void vHwt101DevicePeriodExecute(emHwt101DevNumTdf emDevNum)
-{
-    stHwt101StaticParamTdf  *pStatic;
-    stHwt101RunningParamTdf *pRunning;
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    pStatic  = &gastHwt101DeviceParam[emDevNum].stStaticParam;
-    pRunning = &gastHwt101DeviceParam[emDevNum].stRunningParam;
-
-    if (pStatic->emComMode == emHwt101ComModeUart)
-    {
-        /* UART 模式：检查离线超时 */
-        if (pRunning->u8IsOnline)
-        {
-            uint32_t ulNow = HWT101_GET_TICK();
-            if ((ulNow - pRunning->u32LastRxTick) >= HWT101_OFFLINE_TIMEOUT_MS)
-            {
-                pRunning->u8IsOnline = 0;
-            }
-        }
-    }
-    else /* I2C 模式 */
-    {
-        uint32_t ulNow = HWT101_GET_TICK();
-
-        /* 频率控制 */
-        if ((ulNow - pRunning->u32LastPollTick) < HWT101_I2C_POLL_INTERVAL_MS)
-        {
-            return;
-        }
-        pRunning->u32LastPollTick = ulNow;
-
-        /* 分时轮询寄存器 */
-        switch (pRunning->u8PollPhase)
-        {
-            case 0:  /* 读 GZ (0x39) */
-            {
-                uint8_t aucBuf[2];
-                if (emHwt101I2cReadReg2(emDevNum, HWT101_REG_GZ, aucBuf) == QE_OK)
-                {
-                    pRunning->s16GzRaw = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
-                    pRunning->s32AngularVelZ = (fix32_t)pRunning->s16GzRaw * 4000;
-                    pRunning->u8DataFlags |= HWT101_DATA_GYRO_UPDATE;
-                    pRunning->u8IsOnline = 1;
-                }
-                else
-                {
-                    pRunning->u8IsOnline = 0;
-                }
-                break;
-            }
-
-            case 1:  /* 读 Yaw (0x3F) */
-            {
-                uint8_t aucBuf[2];
-                if (emHwt101I2cReadReg2(emDevNum, HWT101_REG_YAW, aucBuf) == QE_OK)
-                {
-                    pRunning->s16YawRaw = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
-                    pRunning->s32AngleZ = (fix32_t)pRunning->s16YawRaw * 360;
-                    pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
-                    pRunning->u8IsOnline = 1;
-                }
-                break;
-            }
-
-            default:
-                break;
-        }
-
-        pRunning->u8PollPhase = (pRunning->u8PollPhase + 1) & 0x03;
-    }
-}
-
+/* ==================== 直接访问 API ==================== */
 
 /**
  * @brief  输入接收到的原始字节
  */
-void vHwt101RxDataInput(emHwt101DevNumTdf emDevNum, uint8_t *pucData, uint32_t ulLen)
+void vHwt101RxDataInput(emSensorDevNumTdf emSensorDevNum, uint8_t *pucData, uint32_t ulLen)
 {
-    stHwt101RunningParamTdf *pRunning;
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    pRunning = &gastHwt101DeviceParam[emDevNum].stRunningParam;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return; }
+
+    stHwt101RunningParamTdf *pRunning = &gastHwt101DeviceParam[ucLocalIdx].stRunningParam;
     uint32_t i;
 
     for (i = 0; i < ulLen; i++)
@@ -391,7 +263,7 @@ void vHwt101RxDataInput(emHwt101DevNumTdf emDevNum, uint8_t *pucData, uint32_t u
                 pRunning->au8PktBuf[pRunning->u8PktIdx++] = ucByte;
                 if (pRunning->u8PktIdx >= HWT101_PKT_LEN)
                 {
-                    vHwt101ParsePacket(emDevNum, pRunning->au8PktBuf);
+                    vHwt101ParsePacket(ucLocalIdx, pRunning->au8PktBuf);
                     pRunning->u8PktState = 0;
                     pRunning->u8PktIdx = 0;
                 }
@@ -408,37 +280,43 @@ void vHwt101RxDataInput(emHwt101DevNumTdf emDevNum, uint8_t *pucData, uint32_t u
 
 /* ==================== 数据获取 ==================== */
 
-fix32_t s32Hwt101GetAngleZ(emHwt101DevNumTdf emDevNum)
+fix32_t s32Hwt101GetAngleZ(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return 0; }
-    return gastHwt101DeviceParam[emDevNum].stRunningParam.s32AngleZ;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return FIX32_ZERO; }
+    return gastHwt101DeviceParam[ucLocalIdx].stRunningParam.s32AngleZ;
 }
 
-fix32_t s32Hwt101GetAngularVelZ(emHwt101DevNumTdf emDevNum)
+fix32_t s32Hwt101GetAngularVelZ(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return 0; }
-    return gastHwt101DeviceParam[emDevNum].stRunningParam.s32AngularVelZ;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return FIX32_ZERO; }
+    return gastHwt101DeviceParam[ucLocalIdx].stRunningParam.s32AngularVelZ;
 }
 
-uint8_t u8Hwt101IsOnline(emHwt101DevNumTdf emDevNum)
+uint8_t u8Hwt101IsOnline(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return 0; }
-    return gastHwt101DeviceParam[emDevNum].stRunningParam.u8IsOnline;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return 0; }
+    return gastHwt101DeviceParam[ucLocalIdx].stRunningParam.u8IsOnline;
 }
 
-uint16_t u16Hwt101GetVersion(emHwt101DevNumTdf emDevNum)
+uint16_t u16Hwt101GetVersion(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return 0; }
-    return gastHwt101DeviceParam[emDevNum].stRunningParam.u16Version;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return 0; }
+    return gastHwt101DeviceParam[ucLocalIdx].stRunningParam.u16Version;
 }
 
-uint8_t u8Hwt101GetDataFlags(emHwt101DevNumTdf emDevNum)
+uint8_t u8Hwt101GetDataFlags(emSensorDevNumTdf emSensorDevNum)
 {
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return 0; }
+
     uint8_t u8Flags;
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return 0; }
     __disable_irq();
-    u8Flags = gastHwt101DeviceParam[emDevNum].stRunningParam.u8DataFlags;
-    gastHwt101DeviceParam[emDevNum].stRunningParam.u8DataFlags = 0;
+    u8Flags = gastHwt101DeviceParam[ucLocalIdx].stRunningParam.u8DataFlags;
+    gastHwt101DeviceParam[ucLocalIdx].stRunningParam.u8DataFlags = 0;
     __enable_irq();
     return u8Flags;
 }
@@ -449,19 +327,18 @@ uint8_t u8Hwt101GetDataFlags(emHwt101DevNumTdf emDevNum)
 /**
  * @brief  读取传感器寄存器
  */
-QE_StatusTypeDef emHwt101ReadReg(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16_t *ps16Val)
+QE_StatusTypeDef emHwt101ReadReg(emSensorDevNumTdf emSensorDevNum, uint8_t u8Addr, int16_t *ps16Val)
 {
-    stHwt101StaticParamTdf *pStatic;
-
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return QE_ERROR; }
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return QE_ERROR; }
     if (ps16Val == NULL) { return QE_ERROR; }
 
-    pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
+    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[ucLocalIdx].stStaticParam;
 
     if (pStatic->emComMode == emHwt101ComModeI2C)
     {
         uint8_t aucBuf[2];
-        QE_StatusTypeDef emRet = emHwt101I2cReadReg2(emDevNum, u8Addr, aucBuf);
+        QE_StatusTypeDef emRet = emHwt101I2cReadReg2(ucLocalIdx, u8Addr, aucBuf);
         if (emRet == QE_OK)
         {
             *ps16Val = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
@@ -471,7 +348,7 @@ QE_StatusTypeDef emHwt101ReadReg(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int
     else
     {
         /* UART 模式：发送读寄存器命令，结果通过回调返回 */
-        vHwt101UartReadCmd(emDevNum, u8Addr);
+        vHwt101UartReadCmd(ucLocalIdx, u8Addr);
         return QE_OK;
     }
 }
@@ -480,19 +357,20 @@ QE_StatusTypeDef emHwt101ReadReg(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int
 /**
  * @brief  写入传感器寄存器
  */
-QE_StatusTypeDef emHwt101WriteReg(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, int16_t s16Data)
+QE_StatusTypeDef emHwt101WriteReg(emSensorDevNumTdf emSensorDevNum, uint8_t u8Addr, int16_t s16Data)
 {
-    stHwt101StaticParamTdf *pStatic;
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return QE_ERROR; }
-    pStatic = &gastHwt101DeviceParam[emDevNum].stStaticParam;
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return QE_ERROR; }
+
+    stHwt101StaticParamTdf *pStatic = &gastHwt101DeviceParam[ucLocalIdx].stStaticParam;
 
     if (pStatic->emComMode == emHwt101ComModeI2C)
     {
-        return emHwt101I2cWriteReg2(emDevNum, u8Addr, s16Data);
+        return emHwt101I2cWriteReg2(ucLocalIdx, u8Addr, s16Data);
     }
     else
     {
-        vHwt101UartSendCmd(emDevNum, u8Addr, s16Data);
+        vHwt101UartSendCmd(ucLocalIdx, u8Addr, s16Data);
         return QE_OK;
     }
 }
@@ -503,89 +381,287 @@ QE_StatusTypeDef emHwt101WriteReg(emHwt101DevNumTdf emDevNum, uint8_t u8Addr, in
 /**
  * @brief  解锁传感器
  */
-void vHwt101Unlock(emHwt101DevNumTdf emDevNum)
+void vHwt101Unlock(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    emHwt101WriteReg(emDevNum, HWT101_REG_KEY, HWT101_KEY_UNLOCK);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_KEY, HWT101_KEY_UNLOCK);
 }
 
 
 /**
  * @brief  保存配置到传感器 Flash
  */
-void vHwt101Save(emHwt101DevNumTdf emDevNum)
+void vHwt101Save(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    emHwt101WriteReg(emDevNum, HWT101_REG_SAVE, 0x0000);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_SAVE, 0x0000);
 }
 
 
 /**
  * @brief  Z 轴角度归零
  */
-void vHwt101SetZero(emHwt101DevNumTdf emDevNum)
+void vHwt101SetZero(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    vHwt101Unlock(emDevNum);
-    HWT101_DELAY(200);
-    emHwt101WriteReg(emDevNum, HWT101_REG_CALIYAW, 0x0000);
-    HWT101_DELAY(500);
-    vHwt101Save(emDevNum);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    vHwt101Unlock(emSensorDevNum);
+    QE_DELAY(200);
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_CALIYAW, 0x0000);
+    QE_DELAY(500);
+    vHwt101Save(emSensorDevNum);
 }
 
 
 /**
  * @brief  启动自动零偏校准
  */
-void vHwt101StartAutoCali(emHwt101DevNumTdf emDevNum)
+void vHwt101StartAutoCali(emSensorDevNumTdf emSensorDevNum)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    vHwt101Unlock(emDevNum);
-    HWT101_DELAY(200);
-    emHwt101WriteReg(emDevNum, HWT101_REG_CALSW, 0x0001);
-    HWT101_DELAY(500);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    vHwt101Unlock(emSensorDevNum);
+    QE_DELAY(200);
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_CALSW, 0x0001);
+    QE_DELAY(500);
 }
 
 
 /**
  * @brief  设置输出速率
  */
-void vHwt101SetOutputRate(emHwt101DevNumTdf emDevNum, emHwt101RateTdf emRate)
+void vHwt101SetOutputRate(emSensorDevNumTdf emSensorDevNum, emHwt101RateTdf emRate)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    vHwt101Unlock(emDevNum);
-    HWT101_DELAY(200);
-    emHwt101WriteReg(emDevNum, HWT101_REG_RRATE, (int16_t)emRate);
-    HWT101_DELAY(100);
-    vHwt101Save(emDevNum);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    vHwt101Unlock(emSensorDevNum);
+    QE_DELAY(200);
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_RRATE, (int16_t)emRate);
+    QE_DELAY(100);
+    vHwt101Save(emSensorDevNum);
 }
 
 
 /**
  * @brief  关闭/打开陀螺仪自动校准
  */
-void vHwt101SetAutoCali(emHwt101DevNumTdf emDevNum, uint8_t ucEnable)
+void vHwt101SetAutoCali(emSensorDevNumTdf emSensorDevNum, uint8_t ucEnable)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    vHwt101Unlock(emDevNum);
-    HWT101_DELAY(200);
-    emHwt101WriteReg(emDevNum, HWT101_REG_NOAUTOCALI, ucEnable ? 0x0001 : 0x0000);
-    HWT101_DELAY(100);
-    vHwt101Save(emDevNum);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    vHwt101Unlock(emSensorDevNum);
+    QE_DELAY(200);
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_NOAUTOCALI, ucEnable ? 0x0001 : 0x0000);
+    QE_DELAY(100);
+    vHwt101Save(emSensorDevNum);
 }
 
 
 /**
  * @brief  手动获取零偏（MANUALCALI）
  */
-void vHwt101ManualCali(emHwt101DevNumTdf emDevNum, uint8_t ucStart)
+void vHwt101ManualCali(emSensorDevNumTdf emSensorDevNum, uint8_t ucStart)
 {
-    if ((uint8_t)emDevNum >= HWT101_DEV_NUM) { return; }
-    vHwt101Unlock(emDevNum);
-    HWT101_DELAY(200);
-    emHwt101WriteReg(emDevNum, HWT101_REG_MANUALCALI, ucStart ? 0x0001 : 0x0004);
-    HWT101_DELAY(100);
-    vHwt101Save(emDevNum);
+    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    vHwt101Unlock(emSensorDevNum);
+    QE_DELAY(200);
+    emHwt101WriteReg(emSensorDevNum, HWT101_REG_MANUALCALI, ucStart ? 0x0001 : 0x0004);
+    QE_DELAY(100);
+    vHwt101Save(emSensorDevNum);
 }
+
+
+/* ===================== 传感器基类 VTable 实现 ===================== */
+
+#if SENSOR_IS_ENABLE
+
+/** @brief HWT101 VTable 实现函数 */
+
+void vHwt101Init(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return; }
+
+    /* 清零运行参数 */
+    memset(&pstHwt->stRunningParam, 0, sizeof(stHwt101RunningParamTdf));
+
+    if (pstHwt->stStaticParam.emComMode == emHwt101ComModeUart)
+    {
+        /* UART 模式：注册回调到 uart_device */
+        vUartSetCallback(pstHwt->stStaticParam.emUartDev, vHwt101UartCallback);
+    }
+    else /* I2C 模式 */
+    {
+        uint8_t ucIdx = (uint8_t)(pstHwt - gastHwt101DeviceParam);
+        emSensorDevNumTdf emDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucIdx);
+
+        /* 等待传感器上电稳定 */
+        QE_DELAY(100);
+
+        /* 读取版本号验证 I2C 通信是否正常 */
+        uint8_t aucVer[2];
+        QE_StatusTypeDef emRet = emHwt101I2cReadReg2(ucIdx, HWT101_REG_VERSION, aucVer);
+
+        if (emRet == QE_OK)
+        {
+            pstHwt->stRunningParam.u16Version = (uint16_t)(aucVer[0] | ((uint16_t)aucVer[1] << 8));
+
+            /* I2C 通信正常，解锁并配置传感器（按协议文档要求的延时） */
+            vHwt101Unlock(emDev);
+            QE_DELAY(200);
+            emHwt101WriteReg(emDev, HWT101_REG_WORKMODE, 0x0000);  /* 正常数据模式 */
+            QE_DELAY(100);
+            emHwt101WriteReg(emDev, HWT101_REG_RRATE, 0x0006);     /* 10Hz */
+            QE_DELAY(100);
+            vHwt101Save(emDev);
+            QE_DELAY(100);
+        }
+    }
+}
+
+void vHwt101PeriodExecute(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return; }
+
+    /* 计算局部索引 */
+    uint8_t ucLocalIdx = (uint8_t)(pstHwt - gastHwt101DeviceParam);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return; }
+
+    stHwt101StaticParamTdf  *pStatic  = &pstHwt->stStaticParam;
+    stHwt101RunningParamTdf *pRunning = &pstHwt->stRunningParam;
+
+    if (pStatic->emComMode == emHwt101ComModeUart)
+    {
+        /* UART 模式：检查离线超时 */
+        if (pRunning->u8IsOnline)
+        {
+            uint32_t ulNow = QE_GET_TICK();
+            if ((ulNow - pRunning->u32LastRxTick) >= HWT101_OFFLINE_TIMEOUT_MS)
+            {
+                pRunning->u8IsOnline = 0;
+            }
+        }
+    }
+    else /* I2C 模式 */
+    {
+        uint32_t ulNow = QE_GET_TICK();
+
+        /* 频率控制 */
+        if ((ulNow - pRunning->u32LastPollTick) < HWT101_I2C_POLL_INTERVAL_MS)
+        {
+            return;
+        }
+        pRunning->u32LastPollTick = ulNow;
+
+        /* 分时轮询寄存器 */
+        switch (pRunning->u8PollPhase)
+        {
+            case 0:  /* 读 GZ (0x39) */
+            {
+                uint8_t aucBuf[2];
+                if (emHwt101I2cReadReg2(ucLocalIdx, HWT101_REG_GZ, aucBuf) == QE_OK)
+                {
+                    pRunning->s16GzRaw = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
+                    pRunning->s32AngularVelZ = (fix32_t)pRunning->s16GzRaw * 4000;
+                    pRunning->u8DataFlags |= HWT101_DATA_GYRO_UPDATE;
+                    pRunning->u8IsOnline = 1;
+                }
+                else
+                {
+                    pRunning->u8IsOnline = 0;
+                }
+                break;
+            }
+
+            case 1:  /* 读 Yaw (0x3F) */
+            {
+                uint8_t aucBuf[2];
+                if (emHwt101I2cReadReg2(ucLocalIdx, HWT101_REG_YAW, aucBuf) == QE_OK)
+                {
+                    pRunning->s16YawRaw = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
+                    pRunning->s32AngleZ = (fix32_t)pRunning->s16YawRaw * 360;
+                    pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
+                    pRunning->u8IsOnline = 1;
+                }
+                break;
+            }
+
+            default:
+                break;
+        }
+
+        pRunning->u8PollPhase = (pRunning->u8PollPhase + 1) & 0x03;
+    }
+}
+
+fix32_t fHwt101GetValue(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return FIX32_ZERO; }
+    return pstHwt->stRunningParam.s32AngleZ;
+}
+
+void vHwt101Reset(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return; }
+
+    uint8_t ucLocalIdx = (uint8_t)(pstHwt - gastHwt101DeviceParam);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return; }
+
+    emSensorDevNumTdf emSensorDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucLocalIdx);
+    vHwt101SetZero(emSensorDev);
+    pstHwt->stRunningParam.fTargetValue = FIX32_ZERO;
+}
+
+void vHwt101SetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return; }
+    pstHwt->stRunningParam.fTargetValue = fTarget;
+}
+
+fix32_t fHwt101GetTarget(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return FIX32_ZERO; }
+    return pstHwt->stRunningParam.fTargetValue;
+}
+
+/** @brief HWT101 虚方法表 */
+static stSensorVTableTdf g_stHwt101VTable = {
+    vHwt101Init,
+    vHwt101PeriodExecute,
+    fHwt101GetValue,
+    vHwt101Reset,
+    vHwt101SetTarget,
+    fHwt101GetTarget,
+};
+
+
+/* ===================== 注册函数 ===================== */
+
+void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *pstInit)
+{
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM || pstInit == NULL) { return; }
+
+    stHwt101DeviceParamTdf *pstHwt = &gastHwt101DeviceParam[ucLocalIdx];
+    memset(pstHwt, 0, sizeof(stHwt101DeviceParamTdf));
+
+    /* 初始化基类 */
+    pstHwt->stBase.emType          = emSensorTypeHWT101Gyro;
+    pstHwt->stBase.pstVTable       = &g_stHwt101VTable;
+    pstHwt->stBase.ucEnable        = 1;
+    pstHwt->stBase.fWeight         = FIX32_ONE;
+    pstHwt->stBase.emPidDevNum     = emNoPid;
+    pstHwt->stBase.usPidPeriodMs   = 0;
+    pstHwt->stBase.ulPidLastTickMs = 0;
+
+    /* 拷贝静态参数 */
+    memcpy(&pstHwt->stStaticParam, pstInit, sizeof(stHwt101StaticParamTdf));
+
+    /* 注册到 sensor 基类 */
+    vSensorRegisterDevice(emSensorDevNum, &pstHwt->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
 
 #endif

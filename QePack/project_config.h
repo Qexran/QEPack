@@ -68,12 +68,12 @@ typedef enum
 
 /* UART 相关 */
 #define UART_IS_ENABLE									  1							// UART 模块开关
-#define UART_DEV_NUM        							2               			// UART 设备数量
 #define UART_BUF_MAX_LEN    							256             			// UART 收发缓存最大长度
 #define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
 #define UART_TX_QUEUE_MAX_LEN 							256  						// UART 发送队列最大长度，可根据需求调整
 #define UART_TX_BUF_MAX_LEN 							512   						// UART vUartPrintf格式化缓冲区长度
 #define UART_IS_USE_DMA		  							0             				// UART 是否使用DMA传输（正常模式）
+#define UART_DEV_NUM        							3               			// UART 设备数量
 #define UART_DEVICE_0                                           emUartDevNum0
 #define UART_DEVICE_1                                           emUartDevNum1
 #define UART_DEVICE_2                                           emUartDevNum2
@@ -149,7 +149,7 @@ typedef enum
 #define GRAY_SENSOR_DIRECTION                           0                               // 灰度矫正方向
 
 /* PID 相关 */
-#define PID_IS_ENABLE                                   0                               // PID 模块总开关
+#define PID_IS_ENABLE                                   1                               // PID 模块总开关
 #define PID_DEV_NUM                                     2                               // PID 设备数量
 #define PID0                                            emPidDevNum0
 #define PID1                                            emPidDevNum1
@@ -229,7 +229,7 @@ typedef enum
 #define HWT101_DEV_NUM                                 1                               // HWT101 设备数量
 #define HWT101_I2C_POLL_INTERVAL_MS                    10                              // I2C 轮询间隔(ms)
 #define HWT101_OFFLINE_TIMEOUT_MS                      500                             // 离线超时(ms)
-#define HWT101_0                                        emHwt101DevNum0
+#define HWT101_0                                        emSensorHWT101DevNum0
 
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关

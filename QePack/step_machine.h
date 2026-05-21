@@ -11,6 +11,7 @@
 #include "project_config.h"
 #include "stdarg.h"
 #include "string.h"
+#include "arithmetic.h"
 
 #if STEP_M_ENABLE
 #ifndef _STEP_MACHINE_H_
@@ -161,7 +162,7 @@ void vStepPeriodExecute(emSmStepDevTdf emDevNum); // 周期执行函数(1ms定�
                 // 故障额外处理
             }
 
-            HAL_Delay(10);
+            QE_DELAY(10);
         }
     }
 */

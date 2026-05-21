@@ -7,6 +7,7 @@
   *
   */
 #include "emm_step_motor_device.h"
+#include "arithmetic.h"
 
 #if EMM_MOTOR_IS_ENABLE
 
@@ -37,11 +38,7 @@ static void vEmmMotorSendCmd(
     aucCmd[ucIndex++] = EMM_MOTOR_CMD_END_MARK;
     
     vUartSendArray(pstEmmMotor->stStaticParam.emUartDevNum, aucCmd, ucIndex);
-    #if (QEPACK_PLATFORM == ST)
-        HAL_Delay(10);
-    #else
-        TI_Delay(10);
-    #endif
+    QE_DELAY(10);
 }
 
 /**

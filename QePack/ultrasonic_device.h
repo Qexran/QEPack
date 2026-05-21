@@ -15,6 +15,7 @@
 
 #include "string.h"
 #include "math.h"
+#include "arithmetic.h"
 
 /**
  * @brief          超声波设备号枚举
@@ -168,7 +169,7 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
 		vOledUpdate(OLED0);
 		
 		// 4. 测量间隔（避免频率过高）
-		HAL_Delay(100);
+		QE_DELAY(100);
 	  }
 	}
 

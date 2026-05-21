@@ -174,13 +174,13 @@ void vLedDeviceInit(stLedStaticParamTdf *pstInit, emLedDevNumTdf emDevNum);					
         {
             // 直接控制LED
             vLedOn(LED0);
-            HAL_Delay(1000);
+            QE_DELAY(1000);
             vLedOff(LED0);
-            HAL_Delay(1000);
+            QE_DELAY(1000);
             
             // 翻转LED
             vLedToggle(LED0);
-            HAL_Delay(500);
+            QE_DELAY(500);
         }
     }
     
@@ -213,7 +213,7 @@ void vLedDeviceInit(stLedStaticParamTdf *pstInit, emLedDevNumTdf emDevNum);					
         {
             // 1ms周期调用
             vLedDevicePeriodExecute(LED0);
-            HAL_Delay(1);
+            QE_DELAY(1);
         }
     }
     
@@ -247,7 +247,7 @@ void vLedDeviceInit(stLedStaticParamTdf *pstInit, emLedDevNumTdf emDevNum);					
         {
             // 1ms周期调用
             vLedDevicePeriodExecute(LED0);
-            HAL_Delay(1);
+            QE_DELAY(1);
         }
     }
     

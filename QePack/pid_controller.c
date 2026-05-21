@@ -78,9 +78,14 @@ static void vCalcPositionPID(stPidStaticParamTdf *pstStatic, stPidRunningParamTd
 
     fix32_t fDout = fCalculateDerivative(pstStatic, pstRunning, pstRunning->Error, fFeedback, pstRunning->LastError);
 
-    /* 使用 int64_t 避免加法溢出 */
     int64_t llOutput = (int64_t)fPout + (int64_t)pstRunning->Integral + (int64_t)fDout;
-    pstRunning->Output = fix32_sat((fix32_t)llOutput, -pstStatic->MaxOutput, pstStatic->MaxOutput);
+    if (llOutput > (int64_t)pstStatic->MaxOutput) {
+        pstRunning->Output = pstStatic->MaxOutput;
+    } else if (llOutput < -(int64_t)pstStatic->MaxOutput) {
+        pstRunning->Output = -pstStatic->MaxOutput;
+    } else {
+        pstRunning->Output = (fix32_t)llOutput;
+    }
     pstRunning->LastFeedback = fFeedback;
 }
 
@@ -112,9 +117,14 @@ static void vCalcIncrementalPID(stPidStaticParamTdf *pstStatic, stPidRunningPara
         pstRunning->LastDerivative = fDeltaD;
     }
 
-    /* 使用 int64_t 避免累加溢出 */
     int64_t llNewOutput = (int64_t)pstRunning->Output + (int64_t)fDeltaP + (int64_t)fDeltaI + (int64_t)fDeltaD;
-    pstRunning->Output = fix32_sat((fix32_t)llNewOutput, -pstStatic->MaxOutput, pstStatic->MaxOutput);
+    if (llNewOutput > (int64_t)pstStatic->MaxOutput) {
+        pstRunning->Output = pstStatic->MaxOutput;
+    } else if (llNewOutput < -(int64_t)pstStatic->MaxOutput) {
+        pstRunning->Output = -pstStatic->MaxOutput;
+    } else {
+        pstRunning->Output = (fix32_t)llNewOutput;
+    }
     pstRunning->LastFeedback = fFeedback;
 }
 

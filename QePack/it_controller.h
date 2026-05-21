@@ -43,6 +43,10 @@
     #include "servo_device.h"
 #endif
 
+#if HWT101_IS_ENABLE
+    #include "hwt101_device.h"
+#endif
+
 void vDevicePeriodExecute(void);
 
 #endif

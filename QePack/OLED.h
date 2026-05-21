@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "stdlib.h"
+#include "arithmetic.h"
 
 #if (QEPACK_PLATFORM == ST) 
     #include "i2c.h"

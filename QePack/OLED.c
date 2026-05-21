@@ -338,7 +338,7 @@ void vOledDeviceInit(stOledStaticParamTdf *pstInit, emOledDevNumTdf emDevNum)
 	}
 
 	#if (OLED_IS_USE_HARDWARE == 0)
-		TI_Delay(500);
+		QE_DELAY(500);
 	#endif
 	
 	/*写入一系列的命令，对OLED进行初始化配置*/				

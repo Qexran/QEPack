@@ -12,6 +12,7 @@ extern "C" {
 //#include "stm32f4xx_hal.h" // 请根据您的芯片型号修改，如 stm32f1xx_hal.h
 #include <stdint.h>
 #include <stdbool.h>
+#include "arithmetic.h"
 
 /* ================= 配置参数 ================= */
 // QMC5883L I2C 7位地址
@@ -112,7 +113,7 @@ void QMC_SoftReset(I2C_HandleTypeDef *hi2c);
         } else {
             vOledPrintf(OLED0, 1, 1, OLED_8X16, "Mag Init OK!  ");
             vOledUpdateAll();
-            HAL_Delay(500);
+            QE_DELAY(500);
             vOledClear(OLED0);
         }
     }

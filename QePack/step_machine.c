@@ -1,12 +1,8 @@
-/** 
+/**
  * @file    step_machine.c
  * @brief   轻量化步骤机实现
  */
 #include "step_machine.h"
-
-#if (QEPACK_PLATFORM == TI)
-    #define HAL_GetTick() TI_GetTick()
-#endif
 
 #if STEP_M_ENABLE
 // 全局设备参数数组
@@ -46,7 +42,7 @@ static uint16_t u16StepFindNext(stStepItemTdf *pstItem, emStepRetTdf ret)
 static uint8_t u8StepCheckTimeout(stStepItemTdf *pstItem, uint32_t startTick)
 {
     if (pstItem->timeoutMs == 0) return 0;
-    return (HAL_GetTick() - startTick >= pstItem->timeoutMs) ? 1 : 0;
+    return (QE_GET_TICK() - startTick >= pstItem->timeoutMs) ? 1 : 0;
 }
 
 /**
@@ -60,7 +56,7 @@ static void vStepSwitch(emSmStepDevTdf emDevNum, uint16_t nextStep)
     __disable_irq();
     pstDev->curStep = nextStep;
     pstDev->curStepIndex = u8StepFindIndex(emDevNum, nextStep);
-    pstDev->stepStartTick = HAL_GetTick();
+    pstDev->stepStartTick = QE_GET_TICK();
     __set_PRIMASK(ulPrimask);
 }
 
@@ -153,7 +149,7 @@ void vStepStart(emSmStepDevTdf emDevNum)
     stStepDevParamTdf *pstDev = &astStepDev[emDevNum];
     if (pstDev->mState == emStepMStateIdle || pstDev->mState == emStepMStateEnd) {
         pstDev->mState = emStepMStateRunning;
-        pstDev->stepStartTick = HAL_GetTick();
+        pstDev->stepStartTick = QE_GET_TICK();
     }
 }
 

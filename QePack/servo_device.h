@@ -14,6 +14,7 @@
 
 #include "string.h"
 #include "math.h"
+#include "arithmetic.h"
 
 #if (QEPACK_PLATFORM == TI)
 	#include "ti_platform.h"
@@ -194,9 +195,9 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 		{
 			// 示例1：静态模式直接设角度
 			vServoSetValue(SERVO0, 45.0f);
-			HAL_Delay(1000);
+			QE_DELAY(1000);
 			vServoSetValue(SERVO0, 135.0f);
-			HAL_Delay(1000);
+			QE_DELAY(1000);
 			
 			// 示例2：平滑模式调速（需确保1ms调用一次vServoDevicePeriodExecute）
 			vServoSetMode(SERVO0, emServoMode_Smooth);
@@ -204,7 +205,7 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 			for(int i=0; i<1000; i++) // 模拟1ms循环
 			{
 				vServoDevicePeriodExecute(SERVO0);
-				HAL_Delay(1);
+				QE_DELAY(1);
 			}
 		}
 	}

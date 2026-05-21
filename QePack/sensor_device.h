@@ -60,7 +60,11 @@ typedef enum {
     emSensorNBO08XDevNum1        = 17,
     emSensorNBO08XDevNum2        = 18,
 
-    emSensorMaxDevNum      = 19,
+    emSensorHWT101DevNum0      = 19,
+    emSensorHWT101DevNum1      = 20,
+    emSensorHWT101DevNum2      = 21,
+
+    emSensorMaxDevNum      = 22,
 
     emNoSensor = 0xFF,
 } emSensorDevNumTdf;
@@ -81,6 +85,9 @@ typedef struct stSensorDeviceTdf {
     stSensorVTableTdf  *pstVTable;      /* 虚方法表 */
     uint8_t            ucEnable;        /* 使能标志 */
     fix32_t            fWeight;         /* 互补滤波权重（0~1） */
+    emPidDevNumTdf     emPidDevNum;     /* PID 设备号（emNoPid=0xFF 表示不使用） */
+    uint16_t           usPidPeriodMs;   /* PID 计算周期 (ms) */
+    uint32_t           ulPidLastTickMs; /* 上次 PID 计算的时间戳 */
 } stSensorDeviceTdf;
 
 /* 全局传感器设备数组 */
@@ -97,28 +104,27 @@ void vSensorSetTarget(emSensorDevNumTdf emDevNum, fix32_t fTarget);
 fix32_t fSensorGetTarget(emSensorDevNumTdf emDevNum);
 void vSensorSetEnable(emSensorDevNumTdf emDevNum, uint8_t bEnable);
 void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight);
+void vSensorSetPidConfig(emSensorDevNumTdf emDevNum, emPidDevNumTdf emPidDevNum, uint16_t usPeriodMs);
 
 /* 传感器融合 互补滤波 */
 fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNumB);
 
-/* 陀螺仪传感器注册（ucLocalIdx: 0-2 对应 ATK-MS901M 设备 0-2） */
-#if ATK_MS901M_IS_ENABLE
-    #include "atk_ms901m_device.h"
-    void vGyroSensorRegister(uint8_t ucLocalIdx, emAtkMs901mDevNumTdf emAtkDevNum);
-#endif
-
-/* 灰度传感器注册（ucLocalIdx: 0-2 对应灰度设备 0-2） */
-#if GRAY_SENSOR_IS_ENABLE
-    #include "gray_sensor_device.h"
-    void vGraySensorWrapperRegister(uint8_t ucLocalIdx, emGraySensorDevNumTdf emGrayDevNum);
-#endif
-
-/* CCD 传感器注册（ucLocalIdx: 0-3 对应 CCD 设备 0-3） */
-#if LINEAR_CCD_IS_ENABLE
-    #include "linear_ccd_device.h"
-    void vCCDSensorRegister(uint8_t ucLocalIdx, emLinerCcdDevNumTdf emCCDDevNum);
-#endif
-
 #endif /* SENSOR_IS_ENABLE */
 
 #endif /* __SENSOR_DEVICE_H */
+
+/*
+    使用方式
+
+    // 注册 HWT101 到 sensor 基类
+    vHwt101SensorRegister(emSensorHWT101DevNum0);
+
+    // 通过统一接口访问
+    vSensorInit(emSensorHWT101DevNum0);
+    vSensorPeriodExecute(emSensorHWT101DevNum0);
+    fix32_t fAngle = fSensorGetValue(emSensorHWT101DevNum0);
+
+    // 配置 PID 角度环纠偏（10ms 周期）
+    vSensorSetPidConfig(emSensorHWT101DevNum0, emPidDevNum0, 10);
+    vSensorSetTarget(emSensorHWT101DevNum0, fix32_from_float(90.0f));
+*/

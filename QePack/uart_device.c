@@ -526,6 +526,8 @@ void vUartDevicePeriodExecute(emUartDevNumTdf emDevNum)
     stUartStaticParamTdf *pstStatic = &astUartDeviceParam[emDevNum].stStaticParam;
     stUartRunningParamTdf *pstRunning = &astUartDeviceParam[emDevNum].stRunningParam;
 
+    if(pstStatic->pstUartHandle == NULL) return;
+
     if(pstRunning->stUartTempBuffer.count > 0)
     {
         if(pstStatic->emFrameEn == emUartFrameOn)

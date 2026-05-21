@@ -38,7 +38,7 @@ void QMC_SoftReset(I2C_HandleTypeDef *hi2c) {
     // 这里采用上传例程的逻辑：写入 0x09 = 0x80 (仅复位) 或 0x0D (复位+连续)
     // 为了安全，先写复位命令
     QMC_WriteReg(hi2c, QMC_REG_CTRL1, 0x80); 
-    HAL_Delay(10); // 等待复位完成
+    QE_DELAY(10); // 等待复位完成
 }
 
 /**
@@ -76,7 +76,7 @@ QMC_Status QMC_Init(I2C_HandleTypeDef *hi2c) {
     // Step A: 软复位 (写入 0x09 = 0x80)
     status = QMC_WriteReg(hi2c, QMC_REG_CTRL1, 0x80);
     if (status != QMC_OK) return QMC_ERROR;
-    HAL_Delay(10); // 必须延时，等待内部复位完成
+    QE_DELAY(10); // 必须延时，等待内部复位完成
 
     // Step B: 配置 CTRL2 (0x0A) - 设置/重置周期
     status = QMC_WriteReg(hi2c, QMC_REG_CTRL2, QMC_DEFAULT_CTRL2);
@@ -94,7 +94,7 @@ QMC_Status QMC_Init(I2C_HandleTypeDef *hi2c) {
 
     // 3. 等待第一次测量完成
     // 10Hz ODR 下，最长需要 100ms
-    HAL_Delay(50); 
+    QE_DELAY(50); 
 
     return QMC_OK;
 }

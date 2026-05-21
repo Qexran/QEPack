@@ -977,4 +977,115 @@ uint8_t atk_ms901m_set_port_pwm_period(emUartDevNumTdf emDevNum, atk_ms901m_port
     return ATK_MS901M_EOK;
 }
 
+/* ===================== 传感器基类适配 ===================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define GYRO_SENSOR_LOCAL_MAX  3
+
+#define GYRO_SENSOR_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensorAtkMs901MDevNum0))
+
+typedef struct {
+    stSensorDeviceTdf      stBase;
+    emSensorDevNumTdf      emSensorDevNum;
+    fix32_t                fCurrentYaw;
+    fix32_t                fLastYaw;
+    fix32_t                fAccumulatedYaw;
+    fix32_t                fTargetYaw;
+    int32_t                lTurnCount;
+} stGyroSensorDeviceTdf;
+
+static void vGyroSensorInit(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    (void)pstGyro;
+}
+
+static void vGyroSensorPeriodExecute(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    atk_ms901m_attitude_data_t stAttitude;
+
+    if (atk_ms901m_read_attitude((emAtkMs901mDevNumTdf)GYRO_SENSOR_TO_LOCAL(pstGyro->emSensorDevNum), &stAttitude) != ATK_MS901M_EOK) {
+        return;
+    }
+
+    pstGyro->fLastYaw = pstGyro->fCurrentYaw;
+    pstGyro->fCurrentYaw = fix32_from_float(stAttitude.yaw);
+
+    fix32_t fDelta = pstGyro->fCurrentYaw - pstGyro->fLastYaw;
+    if (fDelta > ((fix32_t)(180 * 65536))) {
+        pstGyro->lTurnCount--;
+    } else if (fDelta < ((fix32_t)(-180 * 65536))) {
+        pstGyro->lTurnCount++;
+    }
+
+    pstGyro->fAccumulatedYaw = pstGyro->fCurrentYaw + (fix32_t)((int64_t)(pstGyro->lTurnCount) * 360 * 65536);
+}
+
+static fix32_t fGyroSensorGetValue(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    return pstGyro->fAccumulatedYaw;
+}
+
+static void vGyroSensorReset(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    pstGyro->fAccumulatedYaw = FIX32_ZERO;
+    pstGyro->fCurrentYaw = FIX32_ZERO;
+    pstGyro->fLastYaw = FIX32_ZERO;
+    pstGyro->lTurnCount = 0;
+    pstGyro->fTargetYaw = FIX32_ZERO;
+}
+
+static void vGyroSensorSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    pstGyro->fTargetYaw = fTarget;
+}
+
+static fix32_t fGyroSensorGetTarget(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    return pstGyro->fTargetYaw;
+}
+
+static stSensorVTableTdf g_stGyroSensorVTable = {
+    vGyroSensorInit,
+    vGyroSensorPeriodExecute,
+    fGyroSensorGetValue,
+    vGyroSensorReset,
+    vGyroSensorSetTarget,
+    fGyroSensorGetTarget,
+};
+
+static stGyroSensorDeviceTdf g_astGyroSensorDevices[GYRO_SENSOR_LOCAL_MAX];
+
+void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum)
+{
+    uint8_t ucLocalIdx = GYRO_SENSOR_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= GYRO_SENSOR_LOCAL_MAX) {
+        return;
+    }
+
+    stGyroSensorDeviceTdf *pstGyro = &g_astGyroSensorDevices[ucLocalIdx];
+    memset(pstGyro, 0, sizeof(stGyroSensorDeviceTdf));
+
+    pstGyro->stBase.emType = emSensorTypeAtkMs901MGyro;
+    pstGyro->stBase.pstVTable = &g_stGyroSensorVTable;
+    pstGyro->stBase.ucEnable = 1;
+    pstGyro->stBase.fWeight = FIX32_ONE;
+    pstGyro->stBase.emPidDevNum     = emNoPid;
+    pstGyro->stBase.usPidPeriodMs   = 0;
+    pstGyro->stBase.ulPidLastTickMs = 0;
+    pstGyro->emSensorDevNum = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstGyro->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
+
 #endif

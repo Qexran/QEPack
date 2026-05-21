@@ -269,6 +269,12 @@ uint8_t atk_ms901m_read_barometer(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_baro
  */
 uint8_t atk_ms901m_read_port(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_port_data_t *port_dat);
 
+/* ==================== 传感器基类适配 ==================== */
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+    void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum);
+#endif
+
 #endif
 
 #endif

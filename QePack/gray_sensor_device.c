@@ -285,4 +285,95 @@ void vGraySensorSetStopState(emGraySensorDevNumTdf emDevNum, emGrayStopStateTdf 
     astGraySensorDeviceParam[emDevNum].stRunningParam.emStopState = emStopState;
 }
 
+/* ===================== 传感器基类适配 ===================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define GRAY_SENSOR_WRAPPER_LOCAL_MAX  3
+#define GRAY_SENSOR_WRAPPER_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensorGrayDevNum0))
+
+typedef struct {
+    stSensorDeviceTdf        stBase;
+    emSensorDevNumTdf        emSensorDevNum;
+    fix32_t                  fTargetValue;
+} stGraySensorWrapperDeviceTdf;
+
+static void vGraySensorWrapperInit(void *pstSensor)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    (void)pstGray;
+}
+
+static void vGraySensorWrapperPeriodExecute(void *pstSensor)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    emGraySensorDevNumTdf emGrayDev = (emGraySensorDevNumTdf)GRAY_SENSOR_WRAPPER_TO_LOCAL(pstGray->emSensorDevNum);
+    vGraySensorCheck(emGrayDev);
+    vGraySensorCheckStop(emGrayDev);
+}
+
+static fix32_t fGraySensorWrapperGetValue(void *pstSensor)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    emGraySensorDevNumTdf emGrayDev = (emGraySensorDevNumTdf)GRAY_SENSOR_WRAPPER_TO_LOCAL(pstGray->emSensorDevNum);
+    return (fix32_t)((int64_t)(sGraySensorGetStatus(emGrayDev)) * 65536);
+}
+
+static void vGraySensorWrapperReset(void *pstSensor)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    emGraySensorDevNumTdf emGrayDev = (emGraySensorDevNumTdf)GRAY_SENSOR_WRAPPER_TO_LOCAL(pstGray->emSensorDevNum);
+    vGraySensorSetWorse(emGrayDev, 0);
+    pstGray->fTargetValue = FIX32_ZERO;
+}
+
+static void vGraySensorWrapperSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    pstGray->fTargetValue = fTarget;
+}
+
+static fix32_t fGraySensorWrapperGetTarget(void *pstSensor)
+{
+    stGraySensorWrapperDeviceTdf *pstGray = (stGraySensorWrapperDeviceTdf *)pstSensor;
+    return pstGray->fTargetValue;
+}
+
+static stSensorVTableTdf g_stGraySensorWrapperVTable = {
+    vGraySensorWrapperInit,
+    vGraySensorWrapperPeriodExecute,
+    fGraySensorWrapperGetValue,
+    vGraySensorWrapperReset,
+    vGraySensorWrapperSetTarget,
+    fGraySensorWrapperGetTarget,
+};
+
+static stGraySensorWrapperDeviceTdf g_astGraySensorWrapperDevices[GRAY_SENSOR_WRAPPER_LOCAL_MAX];
+
+void vGraySensorWrapperRegister(emSensorDevNumTdf emSensorDevNum)
+{
+    uint8_t ucLocalIdx = GRAY_SENSOR_WRAPPER_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= GRAY_SENSOR_WRAPPER_LOCAL_MAX) {
+        return;
+    }
+
+    stGraySensorWrapperDeviceTdf *pstGray = &g_astGraySensorWrapperDevices[ucLocalIdx];
+    memset(pstGray, 0, sizeof(stGraySensorWrapperDeviceTdf));
+
+    pstGray->stBase.emType = emSensorTypeGray;
+    pstGray->stBase.pstVTable = &g_stGraySensorWrapperVTable;
+    pstGray->stBase.ucEnable = 1;
+    pstGray->stBase.fWeight = FIX32_ONE;
+    pstGray->stBase.emPidDevNum     = emNoPid;
+    pstGray->stBase.usPidPeriodMs   = 0;
+    pstGray->stBase.ulPidLastTickMs = 0;
+    pstGray->emSensorDevNum = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstGray->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
+
 #endif

@@ -10,6 +10,13 @@
 
 #include <stdint.h>
 #include <math.h>
+#include "project_config.h"
+
+#if (QEPACK_PLATFORM == ST)
+    #include "stm32f1xx_hal.h"
+#else
+    #include "ti_platform.h"
+#endif
 
 #define PI					3.141592653					// PI值
 
@@ -25,7 +32,7 @@ typedef int32_t fix32_t;
 #define FIX32_PI            ((fix32_t)205887)   /* 3.14159265 in Q16.16 */
 
 /* fix32_t -> 整数（截断） */
-#define FIX32_TO_INT(f)     ((int32_t)((f) >> FIX32_FRAC_BITS))
+// #define FIX32_TO_INT(f)     ((int32_t)((f) >> FIX32_FRAC_BITS))
 
 /* 浮点数 -> fix32_t */
 static inline fix32_t fix32_from_float(float f) {
@@ -44,6 +51,16 @@ fix32_t fix32_div(fix32_t a, fix32_t b);
 fix32_t fix32_abs(fix32_t x);
 fix32_t fix32_sat(fix32_t x, fix32_t lo, fix32_t hi);
 fix32_t fix32_sqrt(fix32_t x);
+
+/* ==================== 平台抽象宏 ==================== */
+
+#if (QEPACK_PLATFORM == ST)
+    #define QE_DELAY(ms)     HAL_Delay(ms)
+    #define QE_GET_TICK()    HAL_GetTick()
+#else
+    #define QE_DELAY(ms)     TI_Delay(ms)
+    #define QE_GET_TICK()    TI_GetTick()
+#endif
 
 /* ==================== 工具函数 ==================== */
 

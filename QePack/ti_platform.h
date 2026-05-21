@@ -114,11 +114,17 @@ typedef struct {
 
 typedef void (*vI2CInitFunc)(void);
 void SysTick_Init(void);
-void TI_Delay(uint32_t ms);
+void TI_Delay(unsigned long num_ms);
 
 uint32_t TI_GetTick(void);
 
-void TI_I2C_Mem_Write(
+QE_StatusTypeDef TI_I2C_Mem_Read(
+    stI2CTdf *pstIdf,
+    uint8_t DevAddress, uint8_t MemAddress,
+    uint8_t *pData, uint16_t Size, uint32_t Timeout
+);
+
+QE_StatusTypeDef TI_I2C_Mem_Write(
     stI2CTdf *pstIdf,
     uint8_t DevAddress, uint8_t MemAddress,
     uint8_t *pData, uint16_t Size, uint32_t Timeout

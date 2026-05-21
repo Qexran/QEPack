@@ -18,17 +18,6 @@
 #if GEAR_MOTOR_IS_ENABLE
 
 /* ==============================================
-   平台相关的时间戳获取宏定义
-   ============================================== */
-#if (QEPACK_PLATFORM == TI)
-    /* TI平台：使用TI_GetTick()获取系统滴答 */
-    #define GEAR_MOTOR_GET_TICK() TI_GetTick()
-#else
-    /* 其他平台（默认STM32）：使用HAL_GetTick()获取系统滴答 */
-    #define GEAR_MOTOR_GET_TICK() HAL_GetTick()
-#endif
-
-/* ==============================================
    全局变量：减速电机设备参数数组
    ============================================== */
 stGearMotorDeviceParamTdf astGearMotorDeviceParam[GEAR_MOTOR_DEV_NUM];
@@ -248,7 +237,7 @@ static void vGearMotorPosPeriodExecute(stGearMotorDeviceParamTdf *pstMotorDev)
     /* ─── 3. 速度环 PID ─── */
     fix32_t fPwmOutput = fAbsVelCmd;
     if (pstStatic->emPidDevNum != emNoPid) {
-        uint32_t ulNow = GEAR_MOTOR_GET_TICK();
+        uint32_t ulNow = QE_GET_TICK();
         if (ulNow - pstRun->ulPidLastTickMs >= pstStatic->usPidPeriodMs) {
             pstRun->ulPidLastTickMs = ulNow;
             vPidCalc(pstStatic->emPidDevNum, fAbsVelCmd, fAbsCurrentSpd);
@@ -442,7 +431,7 @@ void vGearMotorPeriodExecute(void *pstMotor) {
         速度模式：PID 计算
         ============================================== */
     if (pstStatic->emPidDevNum != emNoPid) {
-        uint32_t ulNow = GEAR_MOTOR_GET_TICK();
+        uint32_t ulNow = QE_GET_TICK();
         uint32_t ulElapsed = ulNow - pstRun->ulPidLastTickMs;
 
         if (ulElapsed >= pstStatic->usPidPeriodMs) {

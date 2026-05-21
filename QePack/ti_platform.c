@@ -17,11 +17,10 @@ void SysTick_Handler(void)
     tick_ms++;
 }
 
-int mspm0_delay_ms(unsigned long num_ms)
+void TI_Delay(unsigned long num_ms)
 {
     start_time = tick_ms;
     while (tick_ms - start_time < num_ms);
-    return 0;
 }
 
 int mspm0_get_clock_ms(unsigned long *count)
@@ -41,11 +40,6 @@ void SysTick_Init(void)
     is_initialed_clock = 1;
     DL_SYSTICK_config(CPUCLK_FREQ / 1000);
     NVIC_SetPriority(SysTick_IRQn, 0);
-}
-
-void TI_Delay(uint32_t ms)
-{
-    mspm0_delay_ms(ms);
 }
 
 /**
@@ -104,9 +98,9 @@ static void i2c_sda_unlock(
     do
     {
         DL_GPIO_clearPins(pstIdf->pstSclGpioPort, pstIdf->usSclPin);
-        mspm0_delay_ms(1);
+        TI_Delay(1);
         DL_GPIO_setPins(pstIdf->pstSclGpioPort, pstIdf->usSclPin);
-        mspm0_delay_ms(1);
+        TI_Delay(1);
 
         if(DL_GPIO_readPins(pstIdf->pstSdaGpioPort, pstIdf->usSdaPin))
             break;
@@ -118,64 +112,101 @@ static void i2c_sda_unlock(
  * @brief 向I2C设备写入内存
  *
  * @param pstIdf I2C配置结构体指针
- * @param DevAddress 设备地址
- * @param MemAddress 内存地址
+ * @param DevAddress 设备地址（7位）
+ * @param MemAddress 寄存器地址
  * @param pData 数据指针
  * @param Size 数据大小
- * @param Timeout 超时时间
+ * @param Timeout 超时时间（ms）
+ * @return QE_StatusTypeDef QE_OK 成功，QE_TIMEOUT 超时，QE_ERROR 总线错误
+ *
+ * 单次 I2C 事务发送 MemAddress + pData[0..Size-1]。
+ * 支持大于 8 字节的数据块（利用时钟拉伸自动分片填充 FIFO）。
+ * 已添加勘误 I2C_ERR_13 延迟及 BUSY/ERROR 状态检查。
  */
-void TI_I2C_Mem_Write(
+QE_StatusTypeDef TI_I2C_Mem_Write(
     stI2CTdf *pstIdf,
     uint8_t DevAddress, uint8_t MemAddress,
     uint8_t *pData, uint16_t Size, uint32_t Timeout
 )
 {
-    unsigned char ptr[2];
     unsigned long start, cur;
-    /*
-        原函数信息
-        I2C_HandleTypeDef *hi2c, uint16_t DevAddress, uint16_t MemAddress,
-        uint16_t MemAddSize, uint8_t *pData, uint16_t Size, uint32_t Timeout
-    */
-    for(uint16_t i = 0;i < Size; i++){
+    DL_I2C_ClockConfig clockConfig;
+    uint32_t delayCycles;
+    uint8_t  totalBytes = (uint8_t)(1 + Size);
+    uint8_t  bytesSent;
 
-        ptr[0] = MemAddress;
-        ptr[1] = pData[i];
+    /* 计算勘误 I2C_ERR_13 所需延迟（>= 3 个 I2C 功能时钟周期，转换为 CPU 周期） */
+    DL_I2C_getClockConfig(pstIdf->i2c_inst, &clockConfig);
+    delayCycles = 3 * (clockConfig.divideRatio + 1);
+    /* I2C 功能时钟频率 → CPU 周期转换 */
+    if (clockConfig.clockSel == DL_I2C_CLOCK_MFCLK) {
+        delayCycles *= (CPUCLK_FREQ / 4000000);
+    }
+    /* BUSCLK 时 CPUCLK_FREQ / BUSCLK == 1，无需乘 */
 
-        mspm0_get_clock_ms(&start);
+    /* 初始填充 FIFO */
+    bytesSent = DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst, &MemAddress, 1);
+    if (Size > 0) {
+        bytesSent += DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst, pData, Size);
+    }
 
-        // 填充数据到发送FIFO
-        DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst, ptr, 2);
-        // 清除中断标志
-        DL_I2C_clearInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
-        // 等待硬件空闲
-        while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
-        DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress, DL_I2C_CONTROLLER_DIRECTION_TX, 2);
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
 
-        while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE))
+    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress,
+        DL_I2C_CONTROLLER_DIRECTION_TX, totalBytes);
+
+    /* 勘误 I2C_ERR_13 */
+    delay_cycles(delayCycles);
+
+    /* 等待传输完成，期间持续补充 FIFO（利用时钟拉伸，支持 > 8 字节） */
+    mspm0_get_clock_ms(&start);
+    while (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_BUSY)
+    {
+        if (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_ERROR)
         {
-            mspm0_get_clock_ms(&cur);
-            if((cur - start) >= Timeout)
-            {
-                i2c_sda_unlock(pstIdf);
-                break;
-            }
+            i2c_sda_unlock(pstIdf);
+            return QE_ERROR;
+        }
+        /* FIFO 有空位时补充数据 */
+        if (bytesSent < totalBytes)
+        {
+            uint8_t offset = bytesSent - 1;
+            bytesSent += DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst,
+                &pData[offset], totalBytes - bytesSent);
+        }
+        mspm0_get_clock_ms(&cur);
+        if ((cur - start) >= Timeout)
+        {
+            i2c_sda_unlock(pstIdf);
+            return QE_TIMEOUT;
         }
     }
+
+    /* 传输完成后检查总线错误 */
+    if (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_ERROR)
+    {
+        i2c_sda_unlock(pstIdf);
+        return QE_ERROR;
+    }
+
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
+
+    return QE_OK;
 }
 
 /**
  * @brief 从I2C设备读取内存
  *
  * @param pstIdf I2C配置结构体指针
- * @param DevAddress 设备地址
- * @param MemAddress 内存地址
+ * @param DevAddress 设备地址（7位）
+ * @param MemAddress 寄存器地址
  * @param pData 数据指针（输出）
  * @param Size 读取大小
- * @param Timeout 超时时间
- * @return QE_StatusTypeDef QE_OK 成功，QE_TIMEOUT 超时
+ * @param Timeout 超时时间（ms）
+ * @return QE_StatusTypeDef QE_OK 成功，QE_TIMEOUT 超时，QE_ERROR 总线错误
  *
- * I2C 读时序：START + DevAddr(W) + RegAddr → RESTART + DevAddr(R) + Read N bytes + STOP
+ * 采用两次独立传输：先写寄存器地址（TX），再读数据（RX）。
+ * 与 TI 官方轮询示例 i2c_controller_rw_multibyte_fifo_poll 流程一致。
  */
 QE_StatusTypeDef TI_I2C_Mem_Read(
     stI2CTdf *pstIdf,
@@ -184,45 +215,92 @@ QE_StatusTypeDef TI_I2C_Mem_Read(
 )
 {
     unsigned long start, cur;
+    DL_I2C_ClockConfig clockConfig;
+    uint32_t delayCycles;
 
-    /* 第一阶段：写寄存器地址（TX 方向，1 字节） */
+    /* 计算勘误 I2C_ERR_13 所需延迟（>= 3 个 I2C 功能时钟周期，转换为 CPU 周期） */
+    DL_I2C_getClockConfig(pstIdf->i2c_inst, &clockConfig);
+    delayCycles = 3 * (clockConfig.divideRatio + 1);
+    if (clockConfig.clockSel == DL_I2C_CLOCK_MFCLK) {
+        delayCycles *= (CPUCLK_FREQ / 4000000);
+    }
+
+    /* ===== 第一阶段：写寄存器地址（TX） ===== */
     DL_I2C_fillControllerTXFIFO(pstIdf->i2c_inst, &MemAddress, 1);
-    DL_I2C_clearInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
+
     while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
-    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress, DL_I2C_CONTROLLER_DIRECTION_TX, 1);
+
+    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress,
+        DL_I2C_CONTROLLER_DIRECTION_TX, 1);
+
+    delay_cycles(delayCycles);
 
     mspm0_get_clock_ms(&start);
-    while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_TX_DONE))
+    while (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_BUSY)
     {
         mspm0_get_clock_ms(&cur);
-        if((cur - start) >= Timeout)
+        if ((cur - start) >= Timeout)
         {
             i2c_sda_unlock(pstIdf);
             return QE_TIMEOUT;
         }
     }
 
-    /* 第二阶段：读取数据（RX 方向，Size 字节） */
-    DL_I2C_clearInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_RX_DONE);
-    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
-    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress, DL_I2C_CONTROLLER_DIRECTION_RX, Size);
-
-    mspm0_get_clock_ms(&start);
-    while (!DL_I2C_getRawInterruptStatus(pstIdf->i2c_inst, DL_I2C_INTERRUPT_CONTROLLER_RX_DONE))
+    if (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_ERROR)
     {
-        mspm0_get_clock_ms(&cur);
-        if((cur - start) >= Timeout)
-        {
-            i2c_sda_unlock(pstIdf);
-            return QE_TIMEOUT;
-        }
+        i2c_sda_unlock(pstIdf);
+        return QE_ERROR;
     }
 
-    /* 从 RX FIFO 读取数据 */
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
+
+    /* ===== 第二阶段：读取数据（RX） ===== */
+    DL_I2C_startControllerTransfer(pstIdf->i2c_inst, DevAddress,
+        DL_I2C_CONTROLLER_DIRECTION_RX, Size);
+
+    delay_cycles(delayCycles);
+
+    /* 逐字节读取 RX FIFO（与 TI 官方轮询示例一致：边收边读，不等 BUSY 清零） */
     for (uint16_t i = 0; i < Size; i++)
     {
+        mspm0_get_clock_ms(&start);
+        while (DL_I2C_isControllerRXFIFOEmpty(pstIdf->i2c_inst))
+        {
+            /* 传输过程中检测总线错误（NACK 等） */
+            if (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_ERROR)
+            {
+                i2c_sda_unlock(pstIdf);
+                return QE_ERROR;
+            }
+            mspm0_get_clock_ms(&cur);
+            if ((cur - start) >= Timeout)
+            {
+                i2c_sda_unlock(pstIdf);
+                return QE_TIMEOUT;
+            }
+        }
         pData[i] = DL_I2C_receiveControllerData(pstIdf->i2c_inst);
     }
+
+    /* 等待传输完全结束 */
+    mspm0_get_clock_ms(&start);
+    while (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_BUSY)
+    {
+        mspm0_get_clock_ms(&cur);
+        if ((cur - start) >= Timeout)
+        {
+            i2c_sda_unlock(pstIdf);
+            return QE_TIMEOUT;
+        }
+    }
+
+    if (DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_ERROR)
+    {
+        i2c_sda_unlock(pstIdf);
+        return QE_ERROR;
+    }
+
+    while (!(DL_I2C_getControllerStatus(pstIdf->i2c_inst) & DL_I2C_CONTROLLER_STATUS_IDLE));
 
     return QE_OK;
 }
