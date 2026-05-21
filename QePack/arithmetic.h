@@ -31,6 +31,9 @@ typedef int32_t fix32_t;
 #define FIX32_ZERO          ((fix32_t)0)
 #define FIX32_PI            ((fix32_t)205887)   /* 3.14159265 in Q16.16 */
 
+/* 整数 -> fix32_t */
+#define FIX32_FROM_INT(i)   ((fix32_t)((int32_t)(i) << FIX32_FRAC_BITS))
+
 /* fix32_t -> 整数（截断） */
 #define FIX32_TO_INT(f)     ((int32_t)((f) >> FIX32_FRAC_BITS))
 
