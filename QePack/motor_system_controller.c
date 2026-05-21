@@ -13,9 +13,6 @@
 
 stMotorSystemParamTdf g_stMotorSystemController;
 
-/* 编译期常量：0.001 的 Q16.16 表示 ≈ 66 */
-#define FIX32_0_001  ((fix32_t)66)
-
 /* 基准速度（用于传感器差速修正叠加） */
 static fix32_t g_fBaseLeftSpeed = FIX32_ZERO;
 static fix32_t g_fBaseRightSpeed = FIX32_ZERO;
@@ -40,14 +37,31 @@ static void vMecanumKinematics(int vx, int vy, int w, int *speed)
 }
 
 /**
+ * @brief 根据电机反转标志获取实际方向
+ * @param emDir 原始方向
+ * @param ucReversed 是否反转
+ * @return emMotorDirTdf 实际方向
+ */
+static emMotorDirTdf emGetActualDir(emMotorDirTdf emDir, uint8_t ucReversed)
+{
+    if (ucReversed) {
+        return (emDir == emMotorDir_Forward) ? emMotorDir_Backward : emMotorDir_Forward;
+    }
+    return emDir;
+}
+
+/**
  * @brief cm 转 脉冲数
  */
 static int32_t lCmToPulse(fix32_t fCm, fix32_t fWheelCircumferenceCm, fix32_t fPulsePerRev)
 {
-    if (fWheelCircumferenceCm < FIX32_0_001 || fPulsePerRev < FIX32_ONE) {
+    float fCmF = fix32_to_float(fCm);
+    float fCircF = fix32_to_float(fWheelCircumferenceCm);
+    float fPprF = fix32_to_float(fPulsePerRev);
+    if (fCircF < 0.001f || fPprF < 1.0f) {
         return 0;
     }
-    return FIX32_TO_INT(fix32_mul(fix32_div(fCm, fWheelCircumferenceCm), fPulsePerRev));
+    return (int32_t)(fCmF / fCircF * fPprF);
 }
 
 /**
@@ -55,23 +69,25 @@ static int32_t lCmToPulse(fix32_t fCm, fix32_t fWheelCircumferenceCm, fix32_t fP
  */
 static fix32_t fPulseToCm(int32_t lPulse, fix32_t fWheelCircumferenceCm, fix32_t fPulsePerRev)
 {
-    if (fWheelCircumferenceCm < FIX32_0_001 || fPulsePerRev < FIX32_ONE) {
+    float fCircF = fix32_to_float(fWheelCircumferenceCm);
+    float fPprF = fix32_to_float(fPulsePerRev);
+    if (fCircF < 0.001f || fPprF < 1.0f) {
         return FIX32_ZERO;
     }
-    return fix32_div(fix32_mul((fix32_t)((int64_t)(lPulse) * 65536), fWheelCircumferenceCm), fPulsePerRev);
+    return fix32_from_float((float)lPulse / fPprF * fCircF);
 }
 
 /**
  * @brief 根据转弯类型获取目标角度偏移
  */
-static fix32_t fGetTurnAngleOffset(emTurnTypeTdf emTurnType)
+static float fGetTurnAngleOffset(emTurnTypeTdf emTurnType)
 {
     switch (emTurnType) {
-        case emTurnLeft90:   return ((fix32_t)(90 * 65536));
-        case emTurnRight90:  return ((fix32_t)(-90 * 65536));
-        case emTurnLeft180:  return ((fix32_t)(180 * 65536));
-        case emTurnRight180: return ((fix32_t)(-180 * 65536));
-        default:             return FIX32_ZERO;
+        case emTurnLeft90:   return  90.0f;
+        case emTurnRight90:  return -90.0f;
+        case emTurnLeft180:  return  180.0f;
+        case emTurnRight180: return -180.0f;
+        default:             return 0.0f;
     }
 }
 
@@ -170,29 +186,38 @@ void vMotorSystemSetSpeed(fix32_t fLeftFrontSpeed, fix32_t fRightFrontSpeed,
     {
         fix32_t fSumL = fLeftFrontSpeed + fLeftBackSpeed;
         fix32_t fSumR = fRightFrontSpeed + fRightBackSpeed;
-        fix32_t fTwo = (fix32_t)(2 << FIX32_FRAC_BITS);
+        fix32_t fTwo = fix32_from_float(2.0f);
         g_fBaseLeftSpeed = fix32_div(fSumL, fTwo);
         g_fBaseRightSpeed = fix32_div(fSumR, fTwo);
     }
 
+    emMotorDirTdf emLfDir = emGetActualDir(
+        (fLeftFrontSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
+        pstStatic->ucLeftFrontMotorReversed);
+    emMotorDirTdf emRfDir = emGetActualDir(
+        (fRightFrontSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
+        pstStatic->ucRightFrontMotorReversed);
+    emMotorDirTdf emLbDir = emGetActualDir(
+        (fLeftBackSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
+        pstStatic->ucLeftBackMotorReversed);
+    emMotorDirTdf emRbDir = emGetActualDir(
+        (fRightBackSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
+        pstStatic->ucRightBackMotorReversed);
+
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
-            vMotorVelControl(pstStatic->emLeftBackMotorDevNum,
-                (fLeftBackSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
-                (uint16_t)((fLeftBackSpeed >= FIX32_ZERO) ? FIX32_TO_INT(fLeftBackSpeed) : FIX32_TO_INT(-fLeftBackSpeed)), 0, 1);
-            vMotorVelControl(pstStatic->emRightBackMotorDevNum,
-                (fRightBackSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
-                (uint16_t)((fRightBackSpeed >= FIX32_ZERO) ? FIX32_TO_INT(fRightBackSpeed) : FIX32_TO_INT(-fRightBackSpeed)), 0, 1);
+            vMotorVelControl(pstStatic->emLeftBackMotorDevNum, emLbDir,
+                (uint16_t)fix32_to_float(fix32_abs(fLeftBackSpeed)), 0, 1);
+            vMotorVelControl(pstStatic->emRightBackMotorDevNum, emRbDir,
+                (uint16_t)fix32_to_float(fix32_abs(fRightBackSpeed)), 0, 1);
             /* fall through */
         case emChassisDiff2:
             if (pstStatic->emLeftFrontMotorDevNum != emNoMotorDevNum)
-                vMotorVelControl(pstStatic->emLeftFrontMotorDevNum,
-                    (fLeftFrontSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
-                    (uint16_t)((fLeftFrontSpeed >= FIX32_ZERO) ? FIX32_TO_INT(fLeftFrontSpeed) : FIX32_TO_INT(-fLeftFrontSpeed)), 0, 1);
+                vMotorVelControl(pstStatic->emLeftFrontMotorDevNum, emLfDir,
+                    (uint16_t)fix32_to_float(fix32_abs(fLeftFrontSpeed)), 0, 1);
             if (pstStatic->emRightFrontMotorDevNum != emNoMotorDevNum)
-                vMotorVelControl(pstStatic->emRightFrontMotorDevNum,
-                    (fRightFrontSpeed >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward,
-                    (uint16_t)((fRightFrontSpeed >= FIX32_ZERO) ? FIX32_TO_INT(fRightFrontSpeed) : FIX32_TO_INT(-fRightFrontSpeed)), 0, 1);
+                vMotorVelControl(pstStatic->emRightFrontMotorDevNum, emRfDir,
+                    (uint16_t)fix32_to_float(fix32_abs(fRightFrontSpeed)), 0, 1);
             break;
         default:
             break;
@@ -207,27 +232,32 @@ void vMotorSystemVelControl(
     stMotorSystemStaticParamTdf *pstStatic = g_stMotorSystemController.stStaticParam;
     if (pstStatic == NULL) return;
 
-    /* 存储基准速度（uint16_t RPM → Q16.16） */
-    g_fBaseLeftSpeed = (fix32_t)((int64_t)((int32_t)(usLeftFrontSpeed + usLeftBackSpeed) / 2) * 65536);
-    g_fBaseRightSpeed = (fix32_t)((int64_t)((int32_t)(usRightFrontSpeed + usRightBackSpeed) / 2) * 65536);
+    /* 存储基准速度 */
+    g_fBaseLeftSpeed  = fix32_from_float((float)(usLeftFrontSpeed  + usLeftBackSpeed)  / 2.0f);
+    g_fBaseRightSpeed = fix32_from_float((float)(usRightFrontSpeed + usRightBackSpeed) / 2.0f);
+
+    emMotorDirTdf emLfDir = emGetActualDir(emDir, pstStatic->ucLeftFrontMotorReversed);
+    emMotorDirTdf emRfDir = emGetActualDir(emDir, pstStatic->ucRightFrontMotorReversed);
+    emMotorDirTdf emLbDir = emGetActualDir(emDir, pstStatic->ucLeftBackMotorReversed);
+    emMotorDirTdf emRbDir = emGetActualDir(emDir, pstStatic->ucRightBackMotorReversed);
 
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
-            vMotorVelControl(pstStatic->emLeftBackMotorDevNum, emDir, usLeftBackSpeed, ucAcc, 1);
-            vMotorVelControl(pstStatic->emRightBackMotorDevNum, emDir, usRightBackSpeed, ucAcc, 1);
+            vMotorVelControl(pstStatic->emLeftBackMotorDevNum, emLbDir, usLeftBackSpeed, ucAcc, 1);
+            vMotorVelControl(pstStatic->emRightBackMotorDevNum, emRbDir, usRightBackSpeed, ucAcc, 1);
             /* fall through */
         case emChassisDiff2:
-            vMotorVelControl(pstStatic->emLeftFrontMotorDevNum, emDir, usLeftFrontSpeed, ucAcc, 1);
-            vMotorVelControl(pstStatic->emRightFrontMotorDevNum, emDir, usRightFrontSpeed, ucAcc, 1);
+            vMotorVelControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usLeftFrontSpeed, ucAcc, 1);
+            vMotorVelControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usRightFrontSpeed, ucAcc, 1);
             break;
         case emChassisMecanum4: {
             /* 麦轮：前后速度 → 四个轮子速度 */
             int speed[4];
-            vMecanumKinematics(0, usLeftFrontSpeed, 0, speed);
-            vMotorVelControl(pstStatic->emLeftFrontMotorDevNum, emDir, (speed[0] > 0) ? (uint16_t)speed[0] : 0, ucAcc, 1);
-            vMotorVelControl(pstStatic->emRightFrontMotorDevNum, emDir, (speed[1] > 0) ? (uint16_t)speed[1] : 0, ucAcc, 1);
-            vMotorVelControl(pstStatic->emLeftBackMotorDevNum, emDir, (speed[2] > 0) ? (uint16_t)speed[2] : 0, ucAcc, 1);
-            vMotorVelControl(pstStatic->emRightBackMotorDevNum, emDir, (speed[3] > 0) ? (uint16_t)speed[3] : 0, ucAcc, 1);
+            vMecanumKinematics(0, (int)usLeftFrontSpeed, 0, speed);
+            vMotorVelControl(pstStatic->emLeftFrontMotorDevNum, emGetActualDir(emLfDir, speed[0] < 0), (uint16_t)((speed[0] > 0) ? speed[0] : -speed[0]), ucAcc, 1);
+            vMotorVelControl(pstStatic->emRightFrontMotorDevNum, emGetActualDir(emRfDir, speed[1] < 0), (uint16_t)((speed[1] > 0) ? speed[1] : -speed[1]), ucAcc, 1);
+            vMotorVelControl(pstStatic->emLeftBackMotorDevNum, emGetActualDir(emLbDir, speed[2] < 0), (uint16_t)((speed[2] > 0) ? speed[2] : -speed[2]), ucAcc, 1);
+            vMotorVelControl(pstStatic->emRightBackMotorDevNum, emGetActualDir(emRbDir, speed[3] < 0), (uint16_t)((speed[3] > 0) ? speed[3] : -speed[3]), ucAcc, 1);
             break;
         }
         default:
@@ -246,8 +276,8 @@ void vMotorSystemSetPosition(fix32_t fTargetCm)
     int32_t lPulse = lCmToPulse(fTargetCm, pstStatic->fWheelCircumferenceCm, pstStatic->fEncoderPulsePerRev);
     emMotorDirTdf emDir = (fTargetCm >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward;
     uint32_t ulAbsPulse = (uint32_t)((lPulse >= 0) ? lPulse : -lPulse);
-    fix32_t fVelFix = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? pstStatic->fDefaultPosSpeedRPM : ((fix32_t)(60 * 65536));
-    uint16_t usVel = (uint16_t)FIX32_TO_INT(fVelFix);
+    float fVelRPM = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? fix32_to_float(pstStatic->fDefaultPosSpeedRPM) : 60.0f;
+    uint16_t usVel = (uint16_t)fVelRPM;
 
     pstRunning->fTargetPositionCm = fTargetCm;
     /* 位置模式下传感器不介入 */
@@ -255,14 +285,19 @@ void vMotorSystemSetPosition(fix32_t fTargetCm)
 
     vMotorSystemSetState(emMotorStateRunning);
 
+    emMotorDirTdf emLfDir = emGetActualDir(emDir, pstStatic->ucLeftFrontMotorReversed);
+    emMotorDirTdf emRfDir = emGetActualDir(emDir, pstStatic->ucRightFrontMotorReversed);
+    emMotorDirTdf emLbDir = emGetActualDir(emDir, pstStatic->ucLeftBackMotorReversed);
+    emMotorDirTdf emRbDir = emGetActualDir(emDir, pstStatic->ucRightBackMotorReversed);
+
     switch (pstStatic->emChassisType) {
         case emChassisDiff4:
-            vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-            vMotorPosControl(pstStatic->emRightBackMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
+            vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emLbDir, usVel, 0, ulAbsPulse, 0, 1);
+            vMotorPosControl(pstStatic->emRightBackMotorDevNum, emRbDir, usVel, 0, ulAbsPulse, 0, 1);
             /* fall through */
         case emChassisDiff2:
-            vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-            vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
+            vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usVel, 0, ulAbsPulse, 0, 1);
+            vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usVel, 0, ulAbsPulse, 0, 1);
             break;
         default:
             break;
@@ -280,18 +315,23 @@ void vMotorSystemSetPositionX(fix32_t fTargetXCm)
     uint32_t ulAbsPulse = (uint32_t)((lPulse >= 0) ? lPulse : -lPulse);
     emMotorDirTdf emDir = (fTargetXCm >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward;
     emMotorDirTdf emDirOpposite = (emDir == emMotorDir_Forward) ? emMotorDir_Backward : emMotorDir_Forward;
-    fix32_t fVelFix = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? pstStatic->fDefaultPosSpeedRPM : ((fix32_t)(60 * 65536));
-    uint16_t usVel = (uint16_t)FIX32_TO_INT(fVelFix);
+    float fVelRPM = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? fix32_to_float(pstStatic->fDefaultPosSpeedRPM) : 60.0f;
+    uint16_t usVel = (uint16_t)fVelRPM;
 
     pstRunning->fTargetPositionXCm = fTargetXCm;
     pstRunning->ucSensorSuppressed = 1;
     vMotorSystemSetState(emMotorStateRunning);
 
+    emMotorDirTdf emLfDir = emGetActualDir(emDir, pstStatic->ucLeftFrontMotorReversed);
+    emMotorDirTdf emRfDir = emGetActualDir(emDirOpposite, pstStatic->ucRightFrontMotorReversed);
+    emMotorDirTdf emLbDir = emGetActualDir(emDirOpposite, pstStatic->ucLeftBackMotorReversed);
+    emMotorDirTdf emRbDir = emGetActualDir(emDir, pstStatic->ucRightBackMotorReversed);
+
     /* 麦轮 X 轴：LF 和 RB 同向，RF 和 LB 反向 */
-    vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emDirOpposite, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emDirOpposite, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emRightBackMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emLbDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emRightBackMotorDevNum, emRbDir, usVel, 0, ulAbsPulse, 0, 1);
 }
 
 void vMotorSystemSetPositionY(fix32_t fTargetYCm)
@@ -304,17 +344,22 @@ void vMotorSystemSetPositionY(fix32_t fTargetYCm)
     int32_t lPulse = lCmToPulse(fTargetYCm, pstStatic->fWheelCircumferenceCm, pstStatic->fEncoderPulsePerRev);
     uint32_t ulAbsPulse = (uint32_t)((lPulse >= 0) ? lPulse : -lPulse);
     emMotorDirTdf emDir = (fTargetYCm >= FIX32_ZERO) ? emMotorDir_Forward : emMotorDir_Backward;
-    fix32_t fVelFix = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? pstStatic->fDefaultPosSpeedRPM : ((fix32_t)(60 * 65536));
-    uint16_t usVel = (uint16_t)FIX32_TO_INT(fVelFix);
+    float fVelRPM = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? fix32_to_float(pstStatic->fDefaultPosSpeedRPM) : 60.0f;
+    uint16_t usVel = (uint16_t)fVelRPM;
 
     pstRunning->fTargetPositionYCm = fTargetYCm;
     pstRunning->ucSensorSuppressed = 1;
     vMotorSystemSetState(emMotorStateRunning);
 
-    vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
-    vMotorPosControl(pstStatic->emRightBackMotorDevNum, emDir, usVel, 0, ulAbsPulse, 0, 1);
+    emMotorDirTdf emLfDir = emGetActualDir(emDir, pstStatic->ucLeftFrontMotorReversed);
+    emMotorDirTdf emRfDir = emGetActualDir(emDir, pstStatic->ucRightFrontMotorReversed);
+    emMotorDirTdf emLbDir = emGetActualDir(emDir, pstStatic->ucLeftBackMotorReversed);
+    emMotorDirTdf emRbDir = emGetActualDir(emDir, pstStatic->ucRightBackMotorReversed);
+
+    vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emLeftBackMotorDevNum, emLbDir, usVel, 0, ulAbsPulse, 0, 1);
+    vMotorPosControl(pstStatic->emRightBackMotorDevNum, emRbDir, usVel, 0, ulAbsPulse, 0, 1);
 }
 
 /* ==================== 姿态控制 ==================== */
@@ -338,8 +383,8 @@ void vMotorSystemSetPose(fix32_t fTargetYawDeg, fix32_t fOmegaRadS)
     /* 差速旋转：左轮前进，右轮后退（或反之，取决于角度符号）
      * fTurnSpeed = fOmegaRadS * fWheelBaseCm / (2 * fWheelCircumferenceCm) * 60
      * 预计算 factor = fWheelBaseCm * 60 / (2 * fWheelCircumferenceCm)，避免运行时除法 */
-    fix32_t fDenom = pstStatic->fWheelCircumferenceCm << 1;  /* 2 * 周长 */
-    fix32_t fFactor = fix32_div(fix32_mul(pstStatic->fWheelBaseCm, ((fix32_t)(60 * 65536))), fDenom);
+    fix32_t fDenom = fix32_from_float(fix32_to_float(pstStatic->fWheelCircumferenceCm) * 2.0f);
+    fix32_t fFactor = fix32_div(fix32_mul(pstStatic->fWheelBaseCm, fix32_from_float(60.0f)), fDenom);
     fix32_t fTurnSpeed = fix32_mul(fOmegaRadS, fFactor);
 
     if (fTargetYawDeg > FIX32_ZERO) {
@@ -380,7 +425,7 @@ void vMotorSystemTurn(emTurnTypeTdf emTurnType, uint8_t bClosedLoop)
     /* 闭环转弯：使用传感器 PID 控制 */
     stMotorSystemRunningParamTdf *pstRunning = &g_stMotorSystemController.stRunningParam;
 
-    fix32_t fAngleOffset = fGetTurnAngleOffset(emTurnType);
+    fix32_t fAngleOffset = fix32_from_float(fGetTurnAngleOffset(emTurnType));
     pstRunning->fAccumulatedYaw += fAngleOffset;
     pstRunning->fTargetYaw = pstRunning->fAccumulatedYaw;
     pstRunning->ucTurningActive = 1;
@@ -406,14 +451,14 @@ void vMotorSystemTurnOpenLoop(emTurnTypeTdf emTurnType, fix32_t fK)
     stMotorSystemRunningParamTdf *pstRunning = &g_stMotorSystemController.stRunningParam;
     if (pstStatic == NULL) return;
 
-    fix32_t fAngleOffset = fGetTurnAngleOffset(emTurnType);
+    fix32_t fAngleOffset = fix32_from_float(fGetTurnAngleOffset(emTurnType));
     pstRunning->fAccumulatedYaw += fAngleOffset;
     pstRunning->fTargetYaw = pstRunning->fAccumulatedYaw;
     pstRunning->ucTurningActive = 1;
     pstRunning->ucSensorSuppressed = 1;  /* 开环转弯时传感器不干涉 */
 
     /* 开环：用 K 值估算差速 */
-    fix32_t fTurnSpeed = fix32_mul(fK, ((fix32_t)(10 * 65536)));  /* K 值映射到 RPM */
+    fix32_t fTurnSpeed = fix32_mul(fK, fix32_from_float(10.0f));  /* K 值映射到 RPM */
 
     if (fAngleOffset > FIX32_ZERO) {
         vMotorSystemSetSpeed(-fTurnSpeed, fTurnSpeed, -fTurnSpeed, fTurnSpeed);
@@ -434,7 +479,7 @@ void vMotorSystemTurnWithScheme(emTurnTypeTdf emTurnType, emTurnSchemeTdf emSche
     stMotorSystemRunningParamTdf *pstRunning = &g_stMotorSystemController.stRunningParam;
     if (pstStatic == NULL) return;
 
-    fix32_t fAngleOffset = fGetTurnAngleOffset(emTurnType);
+    fix32_t fAngleOffset = fix32_from_float(fGetTurnAngleOffset(emTurnType));
     pstRunning->fAccumulatedYaw += fAngleOffset;
     pstRunning->fTargetYaw = pstRunning->fAccumulatedYaw;
 
@@ -449,7 +494,7 @@ void vMotorSystemTurnWithScheme(emTurnTypeTdf emTurnType, emTurnSchemeTdf emSche
         pstRunning->ucSensorSuppressed = 1;
     }
 
-    fix32_t fTurnSpeed = fix32_mul(fK, ((fix32_t)(10 * 65536)));
+    fix32_t fTurnSpeed = fix32_mul(fK, fix32_from_float(10.0f));
 
     switch (emScheme) {
         case emTurnScheme_DiffSpin: {
@@ -479,20 +524,25 @@ void vMotorSystemTurnWithScheme(emTurnTypeTdf emTurnType, emTurnSchemeTdf emSche
              * fArcLength = (fWheelBaseCm/2) * (fAngleOffset * PI / 180)
              * = fWheelBaseCm * fAngleOffset * PI / 360
              * 预计算 factor = fWheelBaseCm * PI / 360 */
-            fix32_t fFactor = fix32_div(fix32_mul(pstStatic->fWheelBaseCm, FIX32_PI), ((fix32_t)(360 * 65536)));
-            fix32_t fArcLength = fix32_mul(fFactor, fAngleOffset);
+            float fFactorF = fix32_to_float(pstStatic->fWheelBaseCm) * 3.141592653f / 360.0f;
+            fix32_t fArcLength = fix32_from_float(fFactorF * fix32_to_float(fAngleOffset));
             int32_t lPulse = lCmToPulse(fArcLength, pstStatic->fWheelCircumferenceCm, pstStatic->fEncoderPulsePerRev);
             uint32_t ulAbsPulse = (uint32_t)((lPulse >= 0) ? lPulse : -lPulse);
-            fix32_t fVelFix = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? pstStatic->fDefaultPosSpeedRPM : ((fix32_t)(60 * 65536));
-            uint16_t usVel = (uint16_t)FIX32_TO_INT(fVelFix);
+            float fVelRPM = (pstStatic->fDefaultPosSpeedRPM > FIX32_ZERO) ? fix32_to_float(pstStatic->fDefaultPosSpeedRPM) : 60.0f;
+            uint16_t usVel = (uint16_t)fVelRPM;
+
+            emMotorDirTdf emLfDir = emGetActualDir(emMotorDir_Forward, pstStatic->ucLeftFrontMotorReversed);
+            emMotorDirTdf emRfDir = emGetActualDir(emMotorDir_Forward, pstStatic->ucRightFrontMotorReversed);
+            emMotorDirTdf emLbDir = emGetActualDir(emMotorDir_Forward, pstStatic->ucLeftBackMotorReversed);
+            emMotorDirTdf emRbDir = emGetActualDir(emMotorDir_Forward, pstStatic->ucRightBackMotorReversed);
 
             if (fAngleOffset > FIX32_ZERO) {
                 /* 左转：右侧走更多（左轮停，右轮走 arc*2） */
-                vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emMotorDir_Forward, usVel, 0, 0, 0, 1);
-                vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emMotorDir_Forward, usVel, 0, ulAbsPulse * 2, 0, 1);
+                vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usVel, 0, 0, 0, 1);
+                vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usVel, 0, ulAbsPulse * 2, 0, 1);
             } else {
-                vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emMotorDir_Forward, usVel, 0, ulAbsPulse * 2, 0, 1);
-                vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emMotorDir_Forward, usVel, 0, 0, 0, 1);
+                vMotorPosControl(pstStatic->emLeftFrontMotorDevNum, emLfDir, usVel, 0, ulAbsPulse * 2, 0, 1);
+                vMotorPosControl(pstStatic->emRightFrontMotorDevNum, emRfDir, usVel, 0, 0, 0, 1);
             }
             break;
         }
@@ -538,7 +588,7 @@ void vMotorSystemRectifyAuto(fix32_t fTargetTheta, uint32_t ulTimeoutMs)
 
     /* 启动基础差速旋转，由传感器 PID 在周期执行中修正 */
     {
-        fix32_t fTurnSpeed = ((fix32_t)(2 * 65536));
+        fix32_t fTurnSpeed = fix32_from_float(2.0f);
         if (fTargetTheta > FIX32_ZERO) {
             vMotorSystemSetSpeed(-fTurnSpeed, fTurnSpeed, -fTurnSpeed, fTurnSpeed);
         } else {
@@ -638,8 +688,8 @@ void vMotorSystemPeriodExecute(void)
 
     /* 手动矫正超时检查（独立于传感器） */
     if (pstRunning->ucRectifyingActive && pstRunning->ucSensorSuppressed) {
-        pstRunning->fRectifyElapsedMs += ((fix32_t)(MOTOR_SYSTEM_CONTROLLER_PERIOD_MS * 65536));
-        if (pstRunning->fRectifyElapsedMs >= (fix32_t)((int64_t)(pstRunning->ulRectifyTimeoutMs) * 65536)) {
+        pstRunning->fRectifyElapsedMs += fix32_from_float((float)MOTOR_SYSTEM_CONTROLLER_PERIOD_MS);
+        if (pstRunning->fRectifyElapsedMs >= fix32_from_float((float)pstRunning->ulRectifyTimeoutMs)) {
             pstRunning->ucRectifyingActive = 0;
             pstRunning->fRectifyElapsedMs = FIX32_ZERO;
             pstRunning->ucSensorSuppressed = 0;
@@ -686,7 +736,7 @@ void vMotorSystemPeriodExecute(void)
                 /* 检查是否到达目标角度 */
                 fix32_t fError = fTarget - fSensorValue;
                 if (fError < FIX32_ZERO) fError = -fError;
-                if (fError < ((fix32_t)(2 * 65536))) {  /* 2° 容差 */
+                if (fError < fix32_from_float(2.0f)) {  /* 2° 容差 */
                     pstRunning->ucTurningActive = 0;
                     vPidReset(pstStatic->emSensorPidDevNum);
                     vMotorSystemStop();
@@ -708,12 +758,12 @@ void vMotorSystemPeriodExecute(void)
 
         /* 自动矫正模式 */
         if (pstRunning->ucRectifyingActive) {
-            pstRunning->fRectifyElapsedMs += ((fix32_t)(MOTOR_SYSTEM_CONTROLLER_PERIOD_MS * 65536));
+            pstRunning->fRectifyElapsedMs += fix32_from_float((float)MOTOR_SYSTEM_CONTROLLER_PERIOD_MS);
 
             fix32_t fError = fTarget - fSensorValue;
             if (fError < FIX32_ZERO) fError = -fError;
 
-            if (fError < FIX32_ONE || pstRunning->fRectifyElapsedMs >= (fix32_t)((int64_t)(pstRunning->ulRectifyTimeoutMs) * 65536)) {
+            if (fError < FIX32_ONE || pstRunning->fRectifyElapsedMs >= fix32_from_float((float)pstRunning->ulRectifyTimeoutMs)) {
                 pstRunning->ucRectifyingActive = 0;
                 pstRunning->fRectifyElapsedMs = FIX32_ZERO;
                 vPidReset(pstStatic->emSensorPidDevNum);

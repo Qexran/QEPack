@@ -91,6 +91,12 @@ typedef struct {
     emMotorDevNumTdf emLeftBackMotorDevNum;    /* 左后电机 */
     emMotorDevNumTdf emRightBackMotorDevNum;   /* 右后电机 */
 
+    /* 电机方向反转标志（1=反转，0=不转） */
+    uint8_t ucLeftFrontMotorReversed;         /* 左前电机方向反转 */
+    uint8_t ucRightFrontMotorReversed;        /* 右前电机方向反转 */
+    uint8_t ucLeftBackMotorReversed;          /* 左后电机方向反转 */
+    uint8_t ucRightBackMotorReversed;         /* 右后电机方向反转 */
+
     /* 传感器绑定 */
     #if SENSOR_IS_ENABLE
     emSensorDevNumTdf emSensorDevNum;          /* 传感器实例（emNoSensor = 无传感器） */

@@ -32,7 +32,7 @@ typedef int32_t fix32_t;
 #define FIX32_PI            ((fix32_t)205887)   /* 3.14159265 in Q16.16 */
 
 /* fix32_t -> 整数（截断） */
-// #define FIX32_TO_INT(f)     ((int32_t)((f) >> FIX32_FRAC_BITS))
+#define FIX32_TO_INT(f)     ((int32_t)((f) >> FIX32_FRAC_BITS))
 
 /* 浮点数 -> fix32_t */
 static inline fix32_t fix32_from_float(float f) {
