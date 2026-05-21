@@ -345,6 +345,7 @@ static stSensorVTableTdf g_stGraySensorWrapperVTable = {
     vGraySensorWrapperInit,
     vGraySensorWrapperPeriodExecute,
     fGraySensorWrapperGetValue,
+    NULL,
     vGraySensorWrapperReset,
     vGraySensorWrapperSetTarget,
     fGraySensorWrapperGetTarget,

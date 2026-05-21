@@ -150,9 +150,11 @@ typedef enum
 
 /* PID 相关 */
 #define PID_IS_ENABLE                                   1                               // PID 模块总开关
-#define PID_DEV_NUM                                     2                               // PID 设备数量
+#define PID_DEV_NUM                                     4                               // PID 设备数量
 #define PID0                                            emPidDevNum0
 #define PID1                                            emPidDevNum1
+#define PID2                                            emPidDevNum2
+#define PID3                                            emPidDevNum3
 
 /* 电机 相关 */
 #define MOTOR_IS_ENABLE                                 1                               // 电机基类总开关
@@ -175,7 +177,7 @@ typedef enum
 #define MOTOR_EMM3                                      emEmmMotorDevNum3
 
 /* 电机系统控制器 相关 */
-#define MOTOR_SYSTEM_CONTROLLER_IS_ENABLE                  0                               // 电机系统控制器 模块总开关
+#define MOTOR_SYSTEM_CONTROLLER_IS_ENABLE                1                               // 电机系统控制器 模块总开关
 #define MOTOR_SYSTEM_CONTROLLER_DEV_NUM                  1                               // 电机系统控制器 设备数量
 #define MSC0                                             emMotorSystemDevNum0
 #define MOTOR_SYSTEM_CONTROLLER_PERIOD_MS                  10                              // 电机系统控制器 周期 (ms)

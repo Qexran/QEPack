@@ -55,15 +55,18 @@ void vSensorInit(emSensorDevNumTdf emDevNum)
 void vSensorPeriodExecute(emSensorDevNumTdf emDevNum)
 {
     stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
-    if (pstSensor != NULL && pstSensor->ucEnable && pstSensor->pstVTable != NULL
-        && pstSensor->pstVTable->vPeriodExecute != NULL) {
+    if (pstSensor == NULL || pstSensor->pstVTable == NULL) {
+        return;
+    }
+
+    /* 始终调用 vPeriodExecute（保证原始值和累加值更新） */
+    if (pstSensor->pstVTable->vPeriodExecute != NULL) {
         pstSensor->pstVTable->vPeriodExecute(pstSensor);
     }
 
-    /* PID 纠偏计算 */
-    if (pstSensor != NULL && pstSensor->ucEnable
+    /* PID 纠偏计算（ucEnable=0 时跳过） */
+    if (pstSensor->ucEnable
         && pstSensor->emPidDevNum != emNoPid && pstSensor->usPidPeriodMs > 0
-        && pstSensor->pstVTable != NULL
         && pstSensor->pstVTable->fGetTarget != NULL
         && pstSensor->pstVTable->fGetValue != NULL) {
         uint32_t ulNow = QE_GET_TICK();
@@ -72,7 +75,10 @@ void vSensorPeriodExecute(emSensorDevNumTdf emDevNum)
             fix32_t fTarget   = pstSensor->pstVTable->fGetTarget(pstSensor);
             fix32_t fFeedback = pstSensor->pstVTable->fGetValue(pstSensor);
             vPidCalc(pstSensor->emPidDevNum, fTarget, fFeedback);
+            ePidGetOutput(pstSensor->emPidDevNum, &pstSensor->fPidOutput);
         }
+    } else if (!pstSensor->ucEnable) {
+        pstSensor->fPidOutput = FIX32_ZERO;
     }
 }
 
@@ -84,6 +90,30 @@ fix32_t fSensorGetValue(emSensorDevNumTdf emDevNum)
     stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
     if (pstSensor != NULL && pstSensor->pstVTable != NULL && pstSensor->pstVTable->fGetValue != NULL) {
         return pstSensor->pstVTable->fGetValue(pstSensor);
+    }
+    return FIX32_ZERO;
+}
+
+/**
+ * @brief 获取传感器累加值（跨圈连续）
+ */
+fix32_t fSensorGetAccumulatedValue(emSensorDevNumTdf emDevNum)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL && pstSensor->pstVTable != NULL && pstSensor->pstVTable->fGetAccumulatedValue != NULL) {
+        return pstSensor->pstVTable->fGetAccumulatedValue(pstSensor);
+    }
+    return FIX32_ZERO;
+}
+
+/**
+ * @brief 获取传感器 PID 输出值
+ */
+fix32_t fSensorGetPidOutput(emSensorDevNumTdf emDevNum)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL) {
+        return pstSensor->fPidOutput;
     }
     return FIX32_ZERO;
 }

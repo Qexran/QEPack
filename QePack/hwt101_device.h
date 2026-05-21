@@ -92,6 +92,11 @@ typedef struct
         stI2CTdf          *pstI2cHandle;  // I2C 句柄（I2C 模式有效）
     #endif
     uint8_t              u8I2cAddr;       // I2C 从机地址（默认 0x50，可设 0x01~0x7F）
+
+    /* sensor 基类可配置参数（留 0 则使用默认值） */
+    fix32_t              fWeight;         // 互补滤波权重，默认 FIX32_ONE
+    emPidDevNumTdf       emPidDevNum;     // PID 设备号，默认 emNoPid
+    uint16_t             usPidPeriodMs;   // PID 周期(ms)，默认 0
 } stHwt101StaticParamTdf;
 
 
@@ -112,6 +117,10 @@ typedef struct
     /* 物理值 — Q16.16 定点数 */
     fix32_t     s32AngularVelZ;           // Z轴角速度 (°/s)
     fix32_t     s32AngleZ;                // Z轴偏航角 (°)
+
+    /* 角度累加 */
+    fix32_t     fLastAngleZ;              // 上次角度值（用于跨圈检测）
+    int32_t     lTurnCount;               // 跨圈计数（+180→-180 时 +1，-180→+180 时 -1）
 
     /* 状态标志 */
     uint8_t     u8DataFlags;              // HWT101_DATA_GYRO_UPDATE | HWT101_DATA_ANGLE_UPDATE
@@ -183,6 +192,11 @@ void vHwt101SetTarget(void *pstSensor, fix32_t fTarget);
 /// @param  pstSensor ：传感器基类指针
 /// @return 目标角度值
 fix32_t fHwt101GetTarget(void *pstSensor);
+
+/// @brief  获取累加角度值（VTable 实现）
+/// @param  pstSensor ：传感器基类指针
+/// @return Q16.16 定点数，跨圈连续累加，单位 °
+fix32_t fHwt101GetAccumulatedValue(void *pstSensor);
 
 
 /* ==================== 直接访问 API ==================== */

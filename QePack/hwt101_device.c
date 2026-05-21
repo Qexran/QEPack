@@ -17,6 +17,18 @@
 stHwt101DeviceParamTdf gastHwt101DeviceParam[HWT101_DEV_NUM];
 
 
+/** @brief HWT101 虚方法表 */
+static stSensorVTableTdf g_stHwt101VTable = {
+    vHwt101Init,
+    vHwt101PeriodExecute,
+    fHwt101GetValue,
+    fHwt101GetAccumulatedValue,
+    vHwt101Reset,
+    vHwt101SetTarget,
+    fHwt101GetTarget,
+};
+
+
 /* ==================== HWT101 协议常量 ==================== */
 
 #define HWT101_PKT_HEADER       0x55        // 数据包帧头
@@ -168,6 +180,27 @@ static uint8_t u8Hwt101CalcChecksum(uint8_t *pucData)
 
 
 /**
+ * @brief 角度累加：检测跨 ±180° 边界并更新 lTurnCount
+ */
+static void vHwt101UpdateAccumulation(stHwt101RunningParamTdf *pRunning)
+{
+    fix32_t f180  = (fix32_t)180 * FIX32_ONE;
+    fix32_t fDiff = pRunning->s32AngleZ - pRunning->fLastAngleZ;
+
+    if (fDiff > f180)
+    {
+        pRunning->lTurnCount--;
+    }
+    else if (fDiff < -f180)
+    {
+        pRunning->lTurnCount++;
+    }
+
+    pRunning->fLastAngleZ = pRunning->s32AngleZ;
+}
+
+
+/**
  * @brief 解析完整的 11 字节 UART 数据包并更新运行参数
  */
 static void vHwt101ParsePacket(uint8_t ucLocalIdx, uint8_t *pucPkt)
@@ -199,6 +232,8 @@ static void vHwt101ParsePacket(uint8_t ucLocalIdx, uint8_t *pucPkt)
             pRunning->s16YawRaw = (int16_t)(pucPkt[6] | ((uint16_t)pucPkt[7] << 8));
             pRunning->s32AngleZ = (fix32_t)pRunning->s16YawRaw * 360;
             pRunning->u16Version = (uint16_t)(pucPkt[8] | ((uint16_t)pucPkt[9] << 8));
+            /* 角度累加：检测跨 ±180° 边界 */
+            vHwt101UpdateAccumulation(pRunning);
             pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
             pRunning->u8IsOnline = 1;
             pRunning->u32LastRxTick = QE_GET_TICK();
@@ -577,6 +612,7 @@ void vHwt101PeriodExecute(void *pstSensor)
                 {
                     pRunning->s16YawRaw = (int16_t)(aucBuf[0] | ((uint16_t)aucBuf[1] << 8));
                     pRunning->s32AngleZ = (fix32_t)pRunning->s16YawRaw * 360;
+                    vHwt101UpdateAccumulation(pRunning);
                     pRunning->u8DataFlags |= HWT101_DATA_ANGLE_UPDATE;
                     pRunning->u8IsOnline = 1;
                 }
@@ -609,6 +645,8 @@ void vHwt101Reset(void *pstSensor)
     emSensorDevNumTdf emSensorDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucLocalIdx);
     vHwt101SetZero(emSensorDev);
     pstHwt->stRunningParam.fTargetValue = FIX32_ZERO;
+    pstHwt->stRunningParam.fLastAngleZ = FIX32_ZERO;
+    pstHwt->stRunningParam.lTurnCount   = 0;
 }
 
 void vHwt101SetTarget(void *pstSensor, fix32_t fTarget)
@@ -625,15 +663,17 @@ fix32_t fHwt101GetTarget(void *pstSensor)
     return pstHwt->stRunningParam.fTargetValue;
 }
 
-/** @brief HWT101 虚方法表 */
-static stSensorVTableTdf g_stHwt101VTable = {
-    vHwt101Init,
-    vHwt101PeriodExecute,
-    fHwt101GetValue,
-    vHwt101Reset,
-    vHwt101SetTarget,
-    fHwt101GetTarget,
-};
+fix32_t fHwt101GetAccumulatedValue(void *pstSensor)
+{
+    stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
+    if (pstHwt == NULL) { return FIX32_ZERO; }
+    stHwt101RunningParamTdf *pRunning = &pstHwt->stRunningParam;
+    fix32_t f360 = (fix32_t)360 * FIX32_ONE;
+    int64_t llAccum = (int64_t)pRunning->s32AngleZ + (int64_t)pRunning->lTurnCount * f360;
+    if (llAccum > (int64_t)FIX32_MAX)  return FIX32_MAX;
+    if (llAccum < (int64_t)FIX32_MIN)  return FIX32_MIN;
+    return (fix32_t)llAccum;
+}
 
 
 /* ===================== 注册函数 ===================== */
@@ -650,9 +690,9 @@ void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *p
     pstHwt->stBase.emType          = emSensorTypeHWT101Gyro;
     pstHwt->stBase.pstVTable       = &g_stHwt101VTable;
     pstHwt->stBase.ucEnable        = 1;
-    pstHwt->stBase.fWeight         = FIX32_ONE;
-    pstHwt->stBase.emPidDevNum     = emNoPid;
-    pstHwt->stBase.usPidPeriodMs   = 0;
+    pstHwt->stBase.fWeight         = pstInit->fWeight;
+    pstHwt->stBase.emPidDevNum     = pstInit->emPidDevNum;
+    pstHwt->stBase.usPidPeriodMs   = pstInit->usPidPeriodMs;
     pstHwt->stBase.ulPidLastTickMs = 0;
 
     /* 拷贝静态参数 */

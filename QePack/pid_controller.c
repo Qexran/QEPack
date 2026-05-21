@@ -152,6 +152,12 @@ void vPidDeviceInit(stPidStaticParamTdf *pstInit, emPidDevNumTdf emDevNum)
            pstInit,
            sizeof(stPidStaticParamTdf));
 
+    /* MaxOutput 为 0 时默认不限幅，而非输出恒为零 */
+    if (astPidDeviceParam[emDevNum].stStaticParam.MaxOutput == 0)
+    {
+        astPidDeviceParam[emDevNum].stStaticParam.MaxOutput = FIX32_MAX;
+    }
+
     memset(&astPidDeviceParam[emDevNum].stRunningParam,
            0,
            sizeof(stPidRunningParamTdf));

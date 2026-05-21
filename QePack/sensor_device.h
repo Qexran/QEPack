@@ -73,7 +73,8 @@ typedef enum {
 typedef struct stSensorVTableTdf {
     void    (*vInit)(void *pstSensor);                          /* 初始化 */
     void    (*vPeriodExecute)(void *pstSensor);                 /* 周期执行 */
-    fix32_t (*fGetValue)(void *pstSensor);                      /* 获取当前值 */
+    fix32_t (*fGetValue)(void *pstSensor);                      /* 获取当前值（原始角度） */
+    fix32_t (*fGetAccumulatedValue)(void *pstSensor);           /* 获取累加值（跨圈连续） */
     void    (*vReset)(void *pstSensor);                         /* 重置传感器状态 */
     void    (*vSetTarget)(void *pstSensor, fix32_t fTarget);    /* 设置目标值 */
     fix32_t (*fGetTarget)(void *pstSensor);                     /* 获取目标值 */
@@ -84,10 +85,14 @@ typedef struct stSensorDeviceTdf {
     emSensorTypeTdf    emType;          /* 传感器类型 */
     stSensorVTableTdf  *pstVTable;      /* 虚方法表 */
     uint8_t            ucEnable;        /* 使能标志 */
+
     fix32_t            fWeight;         /* 互补滤波权重（0~1） */
+
     emPidDevNumTdf     emPidDevNum;     /* PID 设备号（emNoPid=0xFF 表示不使用） */
     uint16_t           usPidPeriodMs;   /* PID 计算周期 (ms) */
+    
     uint32_t           ulPidLastTickMs; /* 上次 PID 计算的时间戳 */
+    fix32_t            fPidOutput;      /* PID 输出值（基类维护） */
 } stSensorDeviceTdf;
 
 /* 全局传感器设备数组 */
@@ -103,6 +108,8 @@ void vSensorReset(emSensorDevNumTdf emDevNum);
 void vSensorSetTarget(emSensorDevNumTdf emDevNum, fix32_t fTarget);
 fix32_t fSensorGetTarget(emSensorDevNumTdf emDevNum);
 void vSensorSetEnable(emSensorDevNumTdf emDevNum, uint8_t bEnable);
+fix32_t fSensorGetAccumulatedValue(emSensorDevNumTdf emDevNum);
+fix32_t fSensorGetPidOutput(emSensorDevNumTdf emDevNum);
 void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight);
 void vSensorSetPidConfig(emSensorDevNumTdf emDevNum, emPidDevNumTdf emPidDevNum, uint16_t usPeriodMs);
 
@@ -114,6 +121,8 @@ fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNum
 #endif /* __SENSOR_DEVICE_H */
 
 /*
+    注意：基类字段必须显式填写
+    
     使用方式
 
     // 注册 HWT101 到 sensor 基类

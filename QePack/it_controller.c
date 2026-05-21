@@ -245,10 +245,16 @@ void vDevicePeriodExecute(){
     #endif
 
     #if HWT101_IS_ENABLE
-        // vSensorPeriodExecute(HWT101_0);
+        /* 注： I2C 模式不可在 ISR 中调用 */
+        #ifdef HWT101_0 
+            vSensorPeriodExecute(HWT101_0);
+        #endif
+        #ifdef HWT101_1 
+            vSensorPeriodExecute(HWT101_1);
+        #endif
     #endif
-    /* HWT101 的周期执行由用户在 main 循环中调用（I2C 模式不可在 ISR 中调用，
-       UART 模式也建议放在 main 循环，见 hwt101_device.h 使用教程） */
+
+    
 
 }
 

@@ -438,6 +438,7 @@ static stSensorVTableTdf g_stCCDSensorVTable = {
     vCCDSensorInit,
     vCCDSensorPeriodExecute,
     fCCDSensorGetValue,
+    NULL,
     vCCDSensorReset,
     vCCDSensorSetTarget,
     fCCDSensorGetTarget,

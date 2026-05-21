@@ -1028,6 +1028,12 @@ static void vGyroSensorPeriodExecute(void *pstSensor)
 static fix32_t fGyroSensorGetValue(void *pstSensor)
 {
     stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
+    return pstGyro->fCurrentYaw;
+}
+
+static fix32_t fGyroSensorGetAccumulatedValue(void *pstSensor)
+{
+    stGyroSensorDeviceTdf *pstGyro = (stGyroSensorDeviceTdf *)pstSensor;
     return pstGyro->fAccumulatedYaw;
 }
 
@@ -1057,6 +1063,7 @@ static stSensorVTableTdf g_stGyroSensorVTable = {
     vGyroSensorInit,
     vGyroSensorPeriodExecute,
     fGyroSensorGetValue,
+    fGyroSensorGetAccumulatedValue,
     vGyroSensorReset,
     vGyroSensorSetTarget,
     fGyroSensorGetTarget,
