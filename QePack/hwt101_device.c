@@ -627,7 +627,7 @@ void vHwt101PeriodExecute(void *pstSensor)
                 break;
         }
 
-        pRunning->u8PollPhase = (pRunning->u8PollPhase + 1) & 0x03;
+        pRunning->u8PollPhase = (pRunning->u8PollPhase + 1) & 0x01;
     }
 }
 
