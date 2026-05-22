@@ -180,3 +180,4 @@ emMotorStateTdf emGetMotorSystemState(void);
 #endif /* MOTOR_SYSTEM_CONTROLLER_IS_ENABLE */
 
 #endif /* __MOTOR_SYSTEM_CONTROLLER_H */
+
