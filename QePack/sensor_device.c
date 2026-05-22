@@ -64,16 +64,17 @@ void vSensorPeriodExecute(emSensorDevNumTdf emDevNum)
         pstSensor->pstVTable->vPeriodExecute(pstSensor);
     }
 
-    /* PID 纠偏计算（ucEnable=0 时跳过） */
+    /* PID 纠偏计算（ucEnable=0 时跳过）
+       反馈值使用累加值（跨圈连续），避免 ±180° 跳变导致 PID 计算混乱 */
     if (pstSensor->ucEnable
         && pstSensor->emPidDevNum != emNoPid && pstSensor->usPidPeriodMs > 0
         && pstSensor->pstVTable->fGetTarget != NULL
-        && pstSensor->pstVTable->fGetValue != NULL) {
+        && pstSensor->pstVTable->fGetAccumulatedValue != NULL) {
         uint32_t ulNow = QE_GET_TICK();
         if ((ulNow - pstSensor->ulPidLastTickMs) >= pstSensor->usPidPeriodMs) {
             pstSensor->ulPidLastTickMs = ulNow;
             fix32_t fTarget   = pstSensor->pstVTable->fGetTarget(pstSensor);
-            fix32_t fFeedback = pstSensor->pstVTable->fGetValue(pstSensor);
+            fix32_t fFeedback = pstSensor->pstVTable->fGetAccumulatedValue(pstSensor);
             vPidCalc(pstSensor->emPidDevNum, fTarget, fFeedback);
             ePidGetOutput(pstSensor->emPidDevNum, &pstSensor->fPidOutput);
         }

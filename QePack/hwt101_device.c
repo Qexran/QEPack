@@ -438,12 +438,15 @@ void vHwt101Save(emSensorDevNumTdf emSensorDevNum)
  */
 void vHwt101SetZero(emSensorDevNumTdf emSensorDevNum)
 {
-    if (u8Hwt101GetLocalIdx(emSensorDevNum) >= HWT101_DEV_NUM) { return; }
+    uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
+    if (ucLocalIdx >= HWT101_DEV_NUM) { return; }
     vHwt101Unlock(emSensorDevNum);
     QE_DELAY(200);
     emHwt101WriteReg(emSensorDevNum, HWT101_REG_CALIYAW, 0x0000);
     QE_DELAY(500);
     vHwt101Save(emSensorDevNum);
+    /* 硬件归零后，软件零偏也一同清零 */
+    gastHwt101DeviceParam[ucLocalIdx].stRunningParam.fZeroOffset = FIX32_ZERO;
 }
 
 
@@ -516,16 +519,30 @@ void vHwt101Init(void *pstSensor)
     /* 清零运行参数 */
     memset(&pstHwt->stRunningParam, 0, sizeof(stHwt101RunningParamTdf));
 
+    uint8_t  ucIdx  = (uint8_t)(pstHwt - gastHwt101DeviceParam);
+    emSensorDevNumTdf emDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucIdx);
+    emHwt101RateTdf emRate = pstHwt->stStaticParam.emOutputRate;
+
     if (pstHwt->stStaticParam.emComMode == emHwt101ComModeUart)
     {
         /* UART 模式：注册回调到 uart_device */
         vUartSetCallback(pstHwt->stStaticParam.emUartDev, vHwt101UartCallback);
+
+        /* 等待传感器上电稳定 */
+        QE_DELAY(100);
+
+        /* 配置传感器输出速率 */
+        vHwt101Unlock(emDev);
+        QE_DELAY(200);
+        emHwt101WriteReg(emDev, HWT101_REG_WORKMODE, 0x0000);  /* 正常数据模式 */
+        QE_DELAY(100);
+        emHwt101WriteReg(emDev, HWT101_REG_RRATE, (int16_t)emRate);
+        QE_DELAY(100);
+        vHwt101Save(emDev);
+        QE_DELAY(100);
     }
     else /* I2C 模式 */
     {
-        uint8_t ucIdx = (uint8_t)(pstHwt - gastHwt101DeviceParam);
-        emSensorDevNumTdf emDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucIdx);
-
         /* 等待传感器上电稳定 */
         QE_DELAY(100);
 
@@ -542,7 +559,7 @@ void vHwt101Init(void *pstSensor)
             QE_DELAY(200);
             emHwt101WriteReg(emDev, HWT101_REG_WORKMODE, 0x0000);  /* 正常数据模式 */
             QE_DELAY(100);
-            emHwt101WriteReg(emDev, HWT101_REG_RRATE, 0x0006);     /* 10Hz */
+            emHwt101WriteReg(emDev, HWT101_REG_RRATE, (int16_t)emRate);
             QE_DELAY(100);
             vHwt101Save(emDev);
             QE_DELAY(100);
@@ -635,7 +652,7 @@ fix32_t fHwt101GetValue(void *pstSensor)
 {
     stHwt101DeviceParamTdf *pstHwt = (stHwt101DeviceParamTdf *)pstSensor;
     if (pstHwt == NULL) { return FIX32_ZERO; }
-    return pstHwt->stRunningParam.s32AngleZ;
+    return pstHwt->stRunningParam.s32AngleZ - pstHwt->stRunningParam.fZeroOffset;
 }
 
 void vHwt101Reset(void *pstSensor)
@@ -646,11 +663,10 @@ void vHwt101Reset(void *pstSensor)
     uint8_t ucLocalIdx = (uint8_t)(pstHwt - gastHwt101DeviceParam);
     if (ucLocalIdx >= HWT101_DEV_NUM) { return; }
 
-    emSensorDevNumTdf emSensorDev = (emSensorDevNumTdf)(emSensorHWT101DevNum0 + ucLocalIdx);
-    vHwt101SetZero(emSensorDev);
-    pstHwt->stRunningParam.s32AngleZ    = FIX32_ZERO;
+    /* 记录当前原始角度为零偏，后续读数减去此值即得相对角度 */
+    pstHwt->stRunningParam.fZeroOffset  = pstHwt->stRunningParam.s32AngleZ;
     pstHwt->stRunningParam.fTargetValue = FIX32_ZERO;
-    pstHwt->stRunningParam.fLastAngleZ  = FIX32_ZERO;
+    pstHwt->stRunningParam.fLastAngleZ  = pstHwt->stRunningParam.s32AngleZ;
     pstHwt->stRunningParam.lTurnCount   = 0;
 }
 
@@ -674,7 +690,8 @@ fix32_t fHwt101GetAccumulatedValue(void *pstSensor)
     if (pstHwt == NULL) { return FIX32_ZERO; }
     stHwt101RunningParamTdf *pRunning = &pstHwt->stRunningParam;
     fix32_t f360 = (fix32_t)360 * FIX32_ONE;
-    int64_t llAccum = (int64_t)pRunning->s32AngleZ + (int64_t)pRunning->lTurnCount * f360;
+    int64_t llAccum = (int64_t)(pRunning->s32AngleZ - pRunning->fZeroOffset)
+                    + (int64_t)pRunning->lTurnCount * f360;
     if (llAccum > (int64_t)FIX32_MAX)  return FIX32_MAX;
     if (llAccum < (int64_t)FIX32_MIN)  return FIX32_MIN;
     return (fix32_t)llAccum;
@@ -702,6 +719,12 @@ void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *p
 
     /* 拷贝静态参数 */
     memcpy(&pstHwt->stStaticParam, pstInit, sizeof(stHwt101StaticParamTdf));
+
+    /* 输出速率默认值：用户传 0 则默认 100Hz */
+    if (pstHwt->stStaticParam.emOutputRate == 0)
+    {
+        pstHwt->stStaticParam.emOutputRate = emHwt101Rate100Hz;
+    }
 
     /* 注册到 sensor 基类 */
     vSensorRegisterDevice(emSensorDevNum, &pstHwt->stBase);

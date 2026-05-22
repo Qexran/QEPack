@@ -93,6 +93,8 @@ typedef struct
     #endif
     uint8_t              u8I2cAddr;       // I2C 从机地址（默认 0x50，可设 0x01~0x7F）
 
+    emHwt101RateTdf      emOutputRate;    // 输出速率，默认 emHwt101Rate100Hz
+
     /* sensor 基类可配置参数（留 0 则使用默认值） */
     fix32_t              fWeight;         // 互补滤波权重，默认 FIX32_ONE
     emPidDevNumTdf       emPidDevNum;     // PID 设备号，默认 emNoPid
@@ -121,6 +123,9 @@ typedef struct
     /* 角度累加 */
     fix32_t     fLastAngleZ;              // 上次角度值（用于跨圈检测）
     int32_t     lTurnCount;               // 跨圈计数（+180→-180 时 +1，-180→+180 时 -1）
+
+    /* 零偏（软件归零时记录当前原始角度，后续读数减去此值） */
+    fix32_t     fZeroOffset;              // 零偏值（Q16.16）
 
     /* 状态标志 */
     uint8_t     u8DataFlags;              // HWT101_DATA_GYRO_UPDATE | HWT101_DATA_ANGLE_UPDATE

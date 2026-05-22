@@ -211,6 +211,9 @@ void vPidCalc(emPidDevNumTdf emDevNum, fix32_t fReference, fix32_t fFeedback)
         return;
     }
 
+    /* 记录本次目标值，供 fPidGetTarget 查询 */
+    pstRunning->Target = fReference;
+
     if (pstStatic->Mode == emPidModePosition) {
         vCalcPositionPID(pstStatic, pstRunning, fReference, fFeedback);
     } else {
