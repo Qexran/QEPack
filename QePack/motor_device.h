@@ -105,9 +105,10 @@ typedef struct stMotorVTableTdf
     void (*vPosControl)(    
         void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,     
         uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);                   /* 位置控制 */
-    void (*vVelControl)(    
-        void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,     
+    void (*vVelControl)(
+        void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,
         uint8_t bSyncFlag);                                                     /* 速度控制 */
+    void (*vSynchronousMotion)(void *pstMotor);                                 /* 多机同步触发 */
 } stMotorVTableTdf;
 
 
@@ -194,8 +195,15 @@ void vMotorVelControl(
  * @param  bSyncFlag ：同步标志
  */
 void vMotorPosControl(
-    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,
     uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
+
+/**
+ * @brief          多机同步触发
+ * @param  emDevNum ：电机设备号
+ * @note           发送同步触发信号，使之前 bSyncFlag=1 的命令同时执行
+ */
+void vMotorSynchronousMotion(uint8_t emDevNum);
 #endif
 
 #endif

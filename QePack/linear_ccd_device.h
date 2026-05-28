@@ -153,15 +153,15 @@ void vLinerCcdSendToPc(emLinerCcdDevNumTdf emDevNum);
 
     // CCD
     // 1. 从设备采集数据
-    if(vLinerCcdReadData(LINER_CCD0) != TI_OK) while(1);
+    if(vLinerCcdReadData(LINER_CCD0) != QE_OK) while(1);
     // 2. 计算黑白阈值
-    if(vLinerCcdCalculateThreshold(LINER_CCD0) == TI_OK)
+    if(vLinerCcdCalculateThreshold(LINER_CCD0) == QE_OK)
         vOledPrintf(
             OLED0, 1, 1, OLED_8X16, "b/w = %d  ", 
             usLinerCcdGetThreshold(LINER_CCD0)
         );  
     // 3. 计算中线位置
-    if(vLinerCcdFindCenterLine(LINER_CCD0) == TI_OK)
+    if(vLinerCcdFindCenterLine(LINER_CCD0) == QE_OK)
         vOledPrintf(
             OLED0, 1, 16, OLED_8X16, "center = %d  ", 
             sLinerCcdGetCenterLine(LINER_CCD0)

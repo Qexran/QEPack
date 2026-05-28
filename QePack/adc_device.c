@@ -53,9 +53,9 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
     #if (QEPACK_PLATFORM == TI)
         stAdcStaticParamTdf *pstStatic = &astAdcDeviceParam[emDevNum].stStaticParam;
     #endif
-    stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
 
     #if (QEPACK_PLATFORM == ST)
+        stAdcRunningParamTdf *pstRunning = &astAdcDeviceParam[emDevNum].stRunningParam;
         
         // 判断ADC模式
         ADC_HandleTypeDef *hadc = astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase;
@@ -92,6 +92,10 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
             DL_DMA_setDestAddr(DMA, DMA_CH0_CHAN_ID, (uint32_t) &pstStatic->pulDmaBuffer[0]);
 
             DL_DMA_enableChannel(DMA, DMA_CH0_CHAN_ID);
+
+            /* 覆盖 SysConfig 生成的 TransferSize=1，设为缓冲区长度 */
+            /* 确保所有通道传输完成后才触发 DMA_DONE 中断 */
+            DL_DMA_setTransferSize(DMA, DMA_CH0_CHAN_ID, pstStatic->usDmaBufLen);
         #endif
 
         /*
@@ -106,8 +110,10 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
         }
         
             
-        /* 使能 ADC12_0 的中断请求 */
+        /* 使能 ADC12_0 的中断请求（NVIC + 外设中断源） */
         NVIC_EnableIRQ(pstStatic->pstAdcBase->adc_irqn);
+        DL_ADC12_clearInterruptStatus(pstStatic->pstAdcBase->adc_inst, DL_ADC12_INTERRUPT_DMA_DONE);
+        DL_ADC12_enableInterrupt(pstStatic->pstAdcBase->adc_inst, DL_ADC12_INTERRUPT_DMA_DONE);
         
     #endif
     
@@ -136,8 +142,10 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
             return;
 
         #if (QEPACK_PLATFORM == ST)
+            /* HAL_ADCEx_Calibration_Start 仅 F0/F1/F3/G0/G4/H7/L0/L1/L4 等系列存在，
+               STM32F4/F7/F2 系列不需要显式校准，HAL_ADC_Init 已自动处理,这里不默认进行校准 */
             // 校准
-            HAL_ADCEx_Calibration_Start(astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase);
+            //HAL_ADCEx_Calibration_Start(astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase);
 
             if (HAL_ADC_Start_DMA(
                 astAdcDeviceParam[emDevNum].stStaticParam.pstAdcBase,
@@ -172,7 +180,7 @@ void vAdcDeviceInit(stAdcStaticParamTdf *pstInit, emAdcDevNumTdf emDevNum)
         sConfig.Channel = Channel;                                         /* 通道 */
         sConfig.Rank = ADC_REGULAR_RANK_1;                              
         sConfig.SamplingTime = ADC_SAMPLETIME_55CYCLES_5;                  /* 采样时间 */
-        if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK){
+        if (HAL_ADC_ConfigChannel(pstStatic->pstAdcBase, &sConfig) != HAL_OK){
             Error_Handler();
         }
         HAL_ADC_Start(pstStatic->pstAdcBase);
@@ -195,7 +203,7 @@ float fADCConvertToResult(
         uint32_t usValue
     #endif
 ){
-    return (float)usValue / ADC_RESOLUTION * ADC_VREF;
+    return (float)usValue / (float)ADC_RESOLUTION * (float)ADC_VREF;
 }
 
 
@@ -272,11 +280,19 @@ float fADCConvertToResult(
 emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
     if (emDevNum >= ADC_DEV_NUM) return NOT_UPDATE;
 #if ADC_IS_USE_DMA
-    emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.emDataState;
+    #if (QEPACK_PLATFORM == ST)
+        emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.ucDmaDataState;
 
-    if(result == UPDATED){
-        astAdcDeviceParam[emDevNum].stRunningParam.emDataState = NOT_UPDATE;
-    }
+        if(result == UPDATED){
+            astAdcDeviceParam[emDevNum].stRunningParam.ucDmaDataState = NOT_UPDATE;
+        }
+    #else
+        emAdcDataStateTdf result = astAdcDeviceParam[emDevNum].stRunningParam.emDataState;
+
+        if(result == UPDATED){
+            astAdcDeviceParam[emDevNum].stRunningParam.emDataState = NOT_UPDATE;
+        }
+    #endif
 
     return result;
 #else
@@ -397,3 +413,4 @@ emAdcDataStateTdf emAdcGetDataState(emAdcDevNumTdf emDevNum){
 #endif
 
 #endif
+

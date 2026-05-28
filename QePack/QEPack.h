@@ -14,6 +14,10 @@
     #include "led_device.h"
 #endif
 
+#if HC05_IS_ENABLE
+    #include "hc05_device.h"
+#endif
+
 #if KEY_IS_ENABLE
     #include "key_device.h"
 #endif
@@ -94,6 +98,13 @@
     #include "adc_device.h"
 #endif
 
+#if ULTRASONIC_IS_ENABLE
+    #include "ultrasonic_device.h"
+#endif
+
+#if JOYSTICK_IS_ENABLE
+    #include "joystick_device.h"
+#endif
 
 // 生成配置结构体
 #define TI_GET_I2C_STRUCTURE(I2C_NAME) \
@@ -161,5 +172,20 @@ uint32_t TI_GetUartDmaTxTrigger(UART_Regs *uart_inst);
         .pstIntPort  = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_INT1_PORT, \
         .ulIntPin    = GPIO_##BASE_NAME##_PIN_##BASE_NAME##_INT1_PIN, \
     }
+    
+    
+/*
+    STM32F407VET6 定时器总线归属（简明版）
+        APB1 总线（PCLK1，最高 42 MHz）
+            通用定时器：TIM2、TIM3、TIM4、TIM5
+            基本定时器：TIM6、TIM7
+            通用定时器：TIM12、TIM13、TIM14
+        APB2 总线（PCLK2，最高 84 MHz）
+            高级定时器：TIM1、TIM8
+            通用定时器：TIM9、TIM10、TIM11
+    补充：定时器实际时钟（168 MHz 典型配置）
+        APB1 预分频 = 4 → PCLK1 = 42 MHz → TIMx 时钟 = 84 MHz（×2）
+        APB2 预分频 = 2 → PCLK2 = 84 MHz → TIMx 时钟 = 168 MHz（×2）
+*/
 
 #endif

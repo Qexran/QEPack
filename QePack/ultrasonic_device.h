@@ -105,72 +105,132 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
 #endif
 #endif
 /*
-	main.c使用示例
+  ============================================================================
+  CubeMX 配置步骤 (STM32)
+  ============================================================================
 
-	void vOLEDInit(){
-		stOledStaticParamTdf stOledStaticInitTdf;
-		stOledStaticInitTdf.pstSclGpioPort = GPIOB;
-		stOledStaticInitTdf.pstSdaGpioPort = GPIOB;
-		stOledStaticInitTdf.usSclPin	   = GPIO_PIN_9;
-		stOledStaticInitTdf.usSdaPin	   = GPIO_PIN_7;
-		vOledDeviceInit(&stOledStaticInitTdf, OLED0);
-	}
+    STM32F407VET6 定时器总线归属（简明版）
+        APB1 总线（PCLK1，最高 42 MHz）
+            通用定时器：TIM2、TIM3、TIM4、TIM5
+            基本定时器：TIM6、TIM7
+            通用定时器：TIM12、TIM13、TIM14
+        APB2 总线（PCLK2，最高 84 MHz）
+            高级定时器：TIM1、TIM8
+            通用定时器：TIM9、TIM10、TIM11
+    补充：定时器实际时钟（168 MHz 典型配置）
+        APB1 预分频 = 4 → PCLK1 = 42 MHz → TIMx 时钟 = 84 MHz（×2）
+        APB2 预分频 = 2 → PCLK2 = 84 MHz → TIMx 时钟 = 168 MHz（×2）
 
-	// 超声波初始化函数
-	void vUltrasonicInit()
-	{
-		stUltrasonicStaticParamTdf stUltrasonicInit = {
-			.pstTrigGpioBase = GPIOE,        // 触发引脚端口
-			.usTrigGpioPin = GPIO_PIN_8,     // 触发引脚
-			.pstTimHandle = &htim1,          // 定时器句柄
-			.ulICChannel1 = TIM_CHANNEL_1,   // 捕获通道1
-			.ulICChannel2 = TIM_CHANNEL_2,   // 捕获通道2
-			.fTimerPeriod = 1e-6			 // 计数器的计数周期,即自增+1所需时间
-		};
-		// 初始化超声波设备0
-		vUltrasonicDeviceInit(&stUltrasonicInit, emUltrasonicDevNum0);
-	}
+  1. 定时器（输入捕获 — ECHO 引脚）
+     - 选择一个定时器，例如 TIM2（32位）或 TIM3（16位）
+     - Clock Source: Internal Clock
+     - Combined Channels: "Input Capture direct mode" → Channel 1
+     - 再点开 "Input Capture indirect mode" → Channel 2
+       （CH1 捕获上升沿，CH2 捕获下降沿，共用一个输入引脚）
+     - Parameter Settings:
+         Prescaler: <APBx_TimerClock / 1000000> - 1
+           STM32F4: APB1 Timer = 84MHz  → PSC = 84-1
+           STM32F1: APB1 Timer = 72MHz  → PSC = 72-1
+           STM32F4: APB2 Timer = 168MHz → PSC = 168-1
+         Counter Mode: Up
+         Counter Period: 65535  （16位定时器最大值；32位定时器可设 0xFFFFFFFF-1）
+         Auto-reload preload: Enable
+     - NVIC Settings: TIMx global interrupt → 勾选（库用轮询方式，不会进中断，但 HAL 要求）
 
+  2. TRIG 引脚（GPIO 输出）
+     - 选一个空闲 GPIO，例如 PB9，设为 GPIO_Output
+     - Parameter Settings:
+         GPIO output level: Low
+         GPIO mode: Output Push Pull
+         GPIO Pull-up/Pull-down: No pull-up and no pull-down
+         Maximum output speed: Low
 
-	int main(void)
-	{
-	  HAL_Init();
-	  SystemClock_Config();
-	  MX_GPIO_Init();
-	  MX_TIM1_Init();
-	  MX_I2C2_Init();
-	 
-	   vOLEDInit();
-	   vUltrasonicInit();  // 初始化超声波驱动
-	   
-	   vOledPrintf(OLED0, 1, 1,  OLED_8X16, "READY", 0);
-	   vOledUpdate(OLED0);
-	  
+  3. 确认 fTimerPeriod 计算
+     fTimerPeriod = 1 / (定时器时钟 / (Prescaler + 1))
+     例：84MHz / 84 = 1MHz → fTimerPeriod = 1e-6  (1µs)
 
-	  
-	  while (1)
-	  {
-		// 1. 启动超声波测量
-		vUltrasonicStartMeasure(emUltrasonicDevNum0);
-		
-		// 2. 周期执行测量逻辑
-		vUltrasonicDevicePeriodExecute(emUltrasonicDevNum0);
-		
-		// 3. 处理测量结果
-		if (ucUltrasonicIsMeasureSuccess(emUltrasonicDevNum0))
-		{
-			float fDistance = fUltrasonicGetDistance(emUltrasonicDevNum0);
-			vOledPrintf(OLED0, 1, 1,  OLED_8X16, "result:%f m", fDistance);
-		}
-		else
-		{
-			vOledPrintf(OLED0, 1, 1,  OLED_8X16, "Measure Failed", 0);
-		}
-		vOledUpdate(OLED0);
-		
-		// 4. 测量间隔（避免频率过高）
-		QE_DELAY(100);
-	  }
-	}
+  4. project_config.h 开关
+     #define ULTRASONIC_IS_ENABLE   1
+     #define ULTRASONIC_DEV_NUM     1
 
+  ============================================================================
+  SysConfig 配置步骤 (TI MSPM0)
+  ============================================================================
+
+  当前超声波驱动仅支持 STM32 平台（使用了 ST HAL 的 TIM IC / GPIO 宏）。
+  TI 平台需要参照以下思路移植：
+
+  1. 定时器
+     - 使用一个通用定时器的两个 Capture 通道
+     - Capture CH1: 上升沿，Capture CH2: 下降沿（映射到同一输入引脚）
+     - 计数器频率设置为 1MHz（方便计算 us）
+     - 使能捕获中断（或使用轮询方式读取 Capture 寄存器）
+
+  2. TRIG 引脚
+     - 配置一个 GPIO 为输出模式
+
+  3. 移植要点
+     - 将 HAL_TIM_IC_Start/Stop 替换为 DL_Timer_startCapture/DL_Timer_stopCapture
+     - 将 __HAL_TIM_GET_FLAG 替换为 DL_Timer_getPendingInterrupt
+     - 将 HAL_GPIO_WritePin 替换为 DL_GPIO_writePins
+     - Delay_us 在 TI 平台上需使用定时器延时，DWT 不可用（Cortex-M0+ 无 DWT）
+
+  ============================================================================
+  使用示例
+  ============================================================================
+
+  void vUltrasonicInit(void)
+  {
+      stUltrasonicStaticParamTdf stInit = {
+          .pstTrigGpioBase = GPIOB,        // TRIG 引脚端口
+          .usTrigGpioPin   = GPIO_PIN_9,   // TRIG 引脚编号
+          .pstTimHandle    = &htim2,       // 定时器句柄
+          .ulICChannel1    = TIM_CHANNEL_1,// 捕获通道1（上升沿）
+          .ulICChannel2    = TIM_CHANNEL_2,// 捕获通道2（下降沿）
+          .fTimerPeriod    = 1e-6          // 计数器周期 (1us)
+      };
+      vUltrasonicDeviceInit(&stInit, ULTR0);
+  }
+
+  int main(void)
+  {
+      HAL_Init();
+      SystemClock_Config();
+      MX_GPIO_Init();
+      MX_TIM2_Init();          // 定时器初始化必须在超声波初始化之前
+      // ... 其他 MX_xxx_Init() ...
+
+      vUltrasonicInit();
+
+      while (1)
+      {
+          // 1. 空闲时启动测量
+          if (c_pstGetUltrasonicDeviceParam(ULTR0)->stRunningParam.emCurrentStatus
+                  != emUltrasonicStatus_Measuring) {
+              vUltrasonicStartMeasure(ULTR0);
+          }
+
+          // 2. 每轮主循环只调一次（非阻塞，状态机会自动推进）
+          vUltrasonicDevicePeriodExecute(ULTR0);
+
+          // 3. 处理结果
+          if (ucUltrasonicIsMeasureSuccess(ULTR0)) {
+              float fDist = fUltrasonicGetDistance(ULTR0);
+              // fDist 单位为米
+          } else if (c_pstGetUltrasonicDeviceParam(ULTR0)->stRunningParam.emCurrentStatus
+                     == emUltrasonicStatus_Timeout) {
+              // 超时处理（无回波）
+          }
+          // 若状态仍为 Measuring，说明测量还在进行中，下轮循环继续等待
+
+          // 4. 主循环其余工作 ...
+          HAL_Delay(50);
+      }
+  }
+
+  @note 关键注意事项
+    - vUltrasonicDevicePeriodExecute 每轮主循环调一次即可（非阻塞），不要用 while 阻塞轮询
+    - 默认超时 200ms，请确保主循环周期 < 200ms，否则需调大 ulTimeoutMs
+    - SYSTEM_CORE_CLOCK 必须与实际 CPU 频率一致，否则 Delay_us(10) 产生的 TRIG 脉宽不足
+    - fTimerPeriod 要与定时器的 Prescaler 设置匹配
 */

@@ -411,6 +411,18 @@ static void vUartParseFrame(emUartDevNumTdf emDevNum, uint8_t ucData)
     {
         case emUartFrameParseState_WaitHead:
         {
+            /* 无帧头：直接进入数据接收状态，当前字节按数据处理 */
+            if(pstStatic->ucFrameHeadLen == 0)
+            {
+                pstRunning->emFrameParseState = emUartFrameParseState_RecvData;
+                pstRunning->ulFrameDataCount = 0;
+                if(pstRunning->ulFrameDataCount < UART_FRAME_MAX_LEN)
+                {
+                    pstRunning->aucFrameDataBuf[pstRunning->ulFrameDataCount++] = ucData;
+                }
+                break;
+            }
+
             if(ucData == pstStatic->pucFrameHead[pstRunning->s_ucHeadMatchCount])
             {
                 pstRunning->s_ucHeadMatchCount++;

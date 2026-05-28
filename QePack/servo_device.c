@@ -110,10 +110,10 @@ static void vServoUpdatePwm(emServoDevNumTdf emDevNum, float fPulseUs)
 
         DL_Timer_setCaptureCompareValue(pstStatic->stTimer->timer_inst, ulCcr, pstStatic->emChannel);
     #else
-        // 计算ARR值（定时器自动重装值）
-        uint32_t ulArr = (SystemCoreClock / (pstStatic->fPwmFreq * (pstStatic->pstTimHandle->Init.Prescaler + 1))) - 1;
-        // 计算CCR值（比较值）：CCR = (脉冲宽度/1秒) * PWM频率 * ARR
-        uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * ulArr);
+        // 直接读硬件ARR寄存器，避免SystemCoreClock与实际定时器时钟不一致
+        uint32_t ulArr = pstStatic->pstTimHandle->Instance->ARR;
+        // 计算CCR值：CCR = (脉冲宽度/1秒) * PWM频率 * (ARR+1)
+        uint32_t ulCcr = (uint32_t)((fPulseUs / 1000000.0f) * pstStatic->fPwmFreq * (ulArr + 1));
         
         // 设置PWM比较值
         __HAL_TIM_SET_COMPARE(pstStatic->pstTimHandle, pstStatic->ulChannel, ulCcr);
@@ -271,6 +271,68 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
     }
 #endif
 
+/// @brief      270°角度型舵机默认参数初始化（简化版）
+/// @param      emDevNum   ：设备号
+/// @param      pstTimHandle ：TIM句柄
+/// @param      ulChannel ：PWM通道
+#if (QEPACK_PLATFORM == TI )
+    void vServoDeviceDefaultInit_Angle270(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || stTimer == NULL) return;
+
+        stServoStaticParamTdf stStaticInit = {
+            .stTimer = stTimer,
+            .emChannel = emChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_270_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f,
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = SERVO_DEFAULT_ANGLE_270_MAX / 2, // 初始135°
+            .fTargetValue = SERVO_DEFAULT_ANGLE_270_MAX / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#else
+    void vServoDeviceDefaultInit_Angle270(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
+
+        stServoStaticParamTdf stStaticInit = {
+            .pstTimHandle = pstTimHandle,
+            .ulChannel = ulChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_270_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f,
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = SERVO_DEFAULT_ANGLE_270_MAX / 2, // 初始135°
+            .fTargetValue = SERVO_DEFAULT_ANGLE_270_MAX / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#endif
+
 /// @brief      360°旋转型舵机默认参数初始化（简化版）
 /// @param      emDevNum   ：设备号
 /// @param      pstTimHandle ：TIM句柄
@@ -339,6 +401,68 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
         vServoDeviceRunningParamInit(&stRunInit, emDevNum);
         
         // 4. 设置初始速度（停转）
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#endif
+
+/// @brief      360°角度型舵机默认参数初始化（简化版）
+/// @param      emDevNum   ：设备号
+/// @param      pstTimHandle ：TIM句柄
+/// @param      ulChannel ：PWM通道
+#if (QEPACK_PLATFORM == TI )
+    void vServoDeviceDefaultInit_Angle360(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || stTimer == NULL) return;
+
+        stServoStaticParamTdf stStaticInit = {
+            .stTimer = stTimer,
+            .emChannel = emChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_360_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f,
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = SERVO_DEFAULT_ANGLE_360_MAX / 2, // 初始180°
+            .fTargetValue = SERVO_DEFAULT_ANGLE_360_MAX / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
+        vServoSetValue(emDevNum, stRunInit.fCurrentValue);
+    }
+#else
+    void vServoDeviceDefaultInit_Angle360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel)
+    {
+        if(emDevNum >= SERVO_DEV_NUM || pstTimHandle == NULL) return;
+
+        stServoStaticParamTdf stStaticInit = {
+            .pstTimHandle = pstTimHandle,
+            .ulChannel = ulChannel,
+            .fPwmFreq = SERVO_DEFAULT_PWM_FREQ,
+            .emType = emServoType_Angle,
+            .fValueMin = SERVO_DEFAULT_ANGLE_MIN,
+            .fValueMax = SERVO_DEFAULT_ANGLE_360_MAX,
+            .fPulseMin = SERVO_DEFAULT_PULSE_MIN,
+            .fPulseMid = 0.0f,
+            .fPulseMax = SERVO_DEFAULT_PULSE_MAX,
+        };
+
+        stServoRunningParamTdf stRunInit = {
+            .emMode = emServoMode_Static,
+            .fCurrentValue = SERVO_DEFAULT_ANGLE_360_MAX / 2, // 初始180°
+            .fTargetValue = SERVO_DEFAULT_ANGLE_360_MAX / 2,
+            .fSpeed = SERVO_DEFAULT_SPEED,
+        };
+
+        vServoDeviceInit(&stStaticInit, emDevNum);
+        vServoDeviceRunningParamInit(&stRunInit, emDevNum);
         vServoSetValue(emDevNum, stRunInit.fCurrentValue);
     }
 #endif

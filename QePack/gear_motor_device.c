@@ -99,6 +99,7 @@ static stMotorVTableTdf g_stGearMotorVTable = {
     emGetGearMotorState,         /* 获取状态函数指针 */
     vGearMotorPosControl,        /* 位置控制函数指针 */
     vGearMotorVelControl,        /* 速度控制函数指针 */
+    vGearMotorSynchronousMotion, /* 多机同步触发函数指针 */
 };
 
 /* ==============================================
@@ -560,6 +561,16 @@ void vGearMotorEnable(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag)
 emMotorStateTdf emGetGearMotorState(void *pstMotor) {
     stGearMotorDeviceParamTdf *pstGearMotor = (stGearMotorDeviceParamTdf *)pstMotor;
     return pstGearMotor->stBase.emMotorState;
+}
+
+/**
+ * @brief 减速电机多机同步触发（空操作）
+ * @param pstMotor 减速电机设备指针
+ * @note  减速电机由本地 PWM 直接控制，不支持硬件多机同步，此函数为空操作
+ */
+void vGearMotorSynchronousMotion(void *pstMotor)
+{
+    (void)pstMotor;
 }
 
 /**

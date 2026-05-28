@@ -122,11 +122,11 @@ void vDevicePeriodExecute(){
     #endif
     /* ULTRASONIC */
     #if ULTRASONIC_IS_ENABLE
-        #ifdef ULTRASONIC0 
-            vUltrasonicDevicePeriodExecute(ULTRASONIC0); 
+        #ifdef ULTR0 
+//            vUltrasonicDevicePeriodExecute(ULTR0); 
         #endif
-        #ifdef ULTRASONIC1 
-            vUltrasonicDevicePeriodExecute(ULTRASONIC1); 
+        #ifdef ULTR1
+            vUltrasonicDevicePeriodExecute(ULTR1); 
         #endif
     #endif
     /* STEP */
@@ -253,7 +253,18 @@ void vDevicePeriodExecute(){
             vSensorPeriodExecute(HWT101_1);
         #endif
     #endif
-
+    
+    #if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
+        vMotorSystemPeriodExecute();
+    #endif
+	
+	
+    #if JOYSTICK_IS_ENABLE
+        #ifdef JOYSTICK0
+            /* 读取摇杆数据 */
+            vJoystickPeriodExecute(JOYSTICK0);
+        #endif
+    #endif
     
 
 }

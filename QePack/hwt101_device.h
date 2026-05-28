@@ -24,9 +24,7 @@
 
 #if HWT101_IS_ENABLE
 
-#if (QEPACK_PLATFORM == ST)
-    #include "stm32f1xx_hal.h"
-#else
+#if (QEPACK_PLATFORM == TI)
     #include "ti_platform.h"
 #endif
 

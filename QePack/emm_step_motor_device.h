@@ -52,9 +52,34 @@ typedef enum
     emEmmMotorOrgMode_MultiLimit     = 3,    /* 多圈有限位开关回零 */
 } emEmmMotorOrgModeTdf;
 
+/// @brief  EmmMotor校验模式枚举
+typedef enum
+{
+    emEmmMotorChecksum_Fixed6B = 0,    /* 固定0x6B结尾（默认，无校验能力） */
+    emEmmMotorChecksum_XOR     = 1,    /* XOR校验 */
+    emEmmMotorChecksum_CRC8    = 2,    /* CRC-8校验 */
+} emEmmMotorChecksumTdf;
+
 
 /// @brief  EmmMotor接收数据回调函数类型
 typedef void (*vEmmMotorRxCallback)(uint8_t ucAddr, uint8_t *pucData, uint16_t usLen);
+
+/// @brief  EmmMotor上一次运动指令类型（用于超时重试）
+typedef enum
+{
+    emEmmMotorLastCmd_None = 0,   /* 无上一次指令 */
+    emEmmMotorLastCmd_Pos,        /* 位置模式 */
+    emEmmMotorLastCmd_Vel,        /* 速度模式 */
+    emEmmMotorLastCmd_Enable,     /* 使能控制 */
+} emEmmMotorLastCmdTdf;
+
+/// @brief  EmmMotor 错误类型（供上层排查通信/电机故障）
+typedef enum
+{
+    emEmmMotorErr_None       = 0,  /* 无错误 */
+    emEmmMotorErr_NoResponse = 1,  /* 重试耗尽，电机无应答 */
+    emEmmMotorErr_Stall      = 2,  /* 电机堵转（Flag bit2） */
+} emEmmMotorErrTdf;
 
 /// @brief  EmmMotor运行参数定义
 typedef struct
@@ -62,6 +87,22 @@ typedef struct
     uint8_t  aucRxFrameBuf[64];   /* 接收帧缓冲区 */
     uint16_t usRxFrameLen;         /* 接收帧长度 */
     uint8_t  ucRxFrameComplete;    /* 接收帧完成标志 */
+    uint8_t  ucPollCnt;            /* 状态轮询分频计数 */
+    uint8_t  ucPollWait;           /* 等待响应倒计时（非阻塞，每周期 -1） */
+    uint16_t usPollTimeout;        /* 轮询超时计数，超时后触发重试或强制切 Stop */
+    uint8_t  ucLastFlag;           /* 最新 Flag 响应字节（由 UART 回调更新） */
+    uint8_t  ucFlagUpdated;        /* Flag 更新标志（1=有新数据待消费） */
+    uint8_t  ucCmdAckReceived;     /* 上次指令已收到应答（由 UART 回调置1） */
+    uint8_t  ucRetryCnt;           /* 当前重试次数 */
+    uint8_t  ucRetryMax;           /* 最大重试次数（Init 时设为默认值） */
+    emEmmMotorLastCmdTdf emLastCmd; /* 上一次运动指令类型 */
+    /* 上一次指令的原始参数（供重试时复用） */
+    uint8_t  aucLastCmdData[12];
+    uint8_t  ucLastCmdDataLen;
+    emEmmMotorSysParamTdf emLastQueryParam; /* 最近一次查询的参数类型（用于响应校验） */
+    uint8_t  ucExpectedRespLen;    /* 下一次响应的期望长度（含校验字节），0=未知（固定0x6B模式用） */
+    emEmmMotorErrTdf emLastError;  /* 最近一次错误类型（由 PeriodExecute 写入） */
+    uint32_t ulErrorTick;          /* 错误发生时刻（QE_GET_TICK），0 表示无错误 */
 } stEmmMotorRunningParamTdf;
 
 /// @brief  EmmMotor静态参数定义
@@ -69,6 +110,10 @@ typedef struct
 {
     emUartDevNumTdf     emUartDevNum;               /* 关联的UART设备号 */
     uint8_t             ucAddr;                     /* 电机地址 */
+    uint8_t             ucReversed;                 /* 方向反转: 0=正常, 1=反转 */
+    emEmmMotorChecksumTdf emChecksumMode;           /* 校验模式（需与电机端配置一致） */
+    fix32_t             fWheelDiameterCm;           /* 轮子直径(cm), Q16.16, 0=未配置 */
+    fix32_t             fEncoderPulsePerRev;        /* 编码器单圈脉冲数, Q16.16, 0=未配置 */
 } stEmmMotorStaticParamTdf;
 
 /// @brief  EmmMotor设备参数定义
@@ -93,6 +138,9 @@ emMotorStateTdf emGetEmmMotorState(void *pstMotor);
 /* 注册函数 */
 void vEmmMotorRegister(emMotorDevNumTdf emDevNum, stEmmMotorStaticParamTdf *pstInit);
 
+/* 访问器 */
+const stEmmMotorStaticParamTdf *c_pstGetEmmMotorStaticParam(emMotorDevNumTdf emDevNum);
+
 /* 原有方法保持不变 */
 void vEmmMotorResetCurPosToZero(void *pstMotor);
 void vEmmMotorResetClogPro(void *pstMotor);
@@ -101,6 +149,7 @@ void vEmmMotorModifyCtrlMode(void *pstMotor, uint8_t bSave, emEmmMotorCtrlModeTd
 void vEmmMotorVelControl(void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint8_t bSyncFlag);
 void vEmmMotorPosControl(void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag);
 void vEmmMotorSynchronousMotion(void *pstMotor);
+void vEmmMotorSyncBroadcast(emUartDevNumTdf emUartDevNum);
 void vEmmMotorOriginSetO(void *pstMotor, uint8_t bSave);
 void vEmmMotorOriginModifyParams(void *pstMotor, uint8_t bSave, emEmmMotorOrgModeTdf emOrgMode, emMotorDirTdf emDir, 
                                 uint16_t usOrgVel, uint32_t ulOrgTm, uint16_t usSlVel, uint16_t usSlMa, 
@@ -109,6 +158,10 @@ void vEmmMotorOriginTriggerReturn(void *pstMotor, emEmmMotorOrgModeTdf emOrgMode
 void vEmmMotorOriginInterrupt(void *pstMotor);
 void vEmmMotorStopNow(void *pstMotor, uint8_t bSyncFlag);
 void vEmmMotorEnControl(void *pstMotor, uint8_t bEnable, uint8_t bSyncFlag);
+emEmmMotorErrTdf emGetEmmMotorLastError(void *pstMotor);
+void vEmmMotorClearError(void *pstMotor);
+uint8_t ucGetEmmMotorLastFlag(emMotorDevNumTdf emDevNum);
+uint16_t usGetEmmMotorFlagRxCnt(emMotorDevNumTdf emDevNum);
 
 #endif
 #endif

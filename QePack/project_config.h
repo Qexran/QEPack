@@ -31,8 +31,8 @@ typedef enum
 #include                        "qepack_settings.h"
 
 #if (QEPACK_PLATFORM == ST) // 设备头文件
-    #include					          "stm32f1xx_hal.h"			    
-    #include					          "stm32f1xx_hal_def.h"
+    #include					          "stm32f4xx_hal.h"			    
+    #include					          "stm32f4xx_hal_def.h"
 #else
     #include                    "ti_msp_dl_config.h"
     #include                    <ti/driverlib/dl_flashctl.h>
@@ -41,7 +41,7 @@ typedef enum
 
 
 #if (QEPACK_PLATFORM == ST)
-  #define	SYSTEM_CORE_CLOCK	72000000U					// 系统时钟频率
+  #define	SYSTEM_CORE_CLOCK	168000000U					// 系统时钟频率
 #else
   #define SYSTEM_CORE_CLOCK CPUCLK_FREQ
 #endif
@@ -68,15 +68,16 @@ typedef enum
 
 /* UART 相关 */
 #define UART_IS_ENABLE									  1							// UART 模块开关
-#define UART_BUF_MAX_LEN    							256             			// UART 收发缓存最大长度
-#define UART_FRAME_MAX_LEN  							128             			// UART 帧数据最大长度
-#define UART_TX_QUEUE_MAX_LEN 							256  						// UART 发送队列最大长度，可根据需求调整
-#define UART_TX_BUF_MAX_LEN 							512   						// UART vUartPrintf格式化缓冲区长度
+#define UART_BUF_MAX_LEN    							512             			// UART 收发缓存最大长度
+#define UART_FRAME_MAX_LEN  							256             			// UART 帧数据最大长度
+#define UART_TX_QUEUE_MAX_LEN 							512  						// UART 发送队列最大长度，可根据需求调整
+#define UART_TX_BUF_MAX_LEN 							2048   						// UART vUartPrintf格式化缓冲区长度
 #define UART_IS_USE_DMA		  							0             				// UART 是否使用DMA传输（正常模式）
-#define UART_DEV_NUM        							3               			// UART 设备数量
+#define UART_DEV_NUM        							4               			// UART 设备数量
 #define UART_DEVICE_0                                           emUartDevNum0
 #define UART_DEVICE_1                                           emUartDevNum1
 #define UART_DEVICE_2                                           emUartDevNum2
+#define UART_DEVICE_3                                           emUartDevNum3
 
 
 /* OLED 相关 */
@@ -95,12 +96,16 @@ typedef enum
 
 
 /* 舵机 相关 */
-#define SERVO_IS_ENABLE								    0								// 舵机模块总开关
+#define SERVO_IS_ENABLE								    1								// 舵机模块总开关
 #define SERVO_DEV_NUM        						    1               				// 舵机设备数量
 #define SERVO_DEFAULT_PWM_FREQ						    50.0f							// 舵机默认PWM频率(Hz)，常规50Hz
 										// 180°角度型舵机默认参数 [使用 vServoDeviceDefaultInit_Angle() ]
 #define SERVO_DEFAULT_ANGLE_MIN						    0.0f							// 最小可控角度(°)
 #define SERVO_DEFAULT_ANGLE_MAX						    180.0f							// 最大可控角度(°)
+									// 270°角度型舵机默认参数 [使用 vServoDeviceDefaultInit_Angle270() ]
+#define SERVO_DEFAULT_ANGLE_270_MAX					    270.0f                          // 270°舵机最大可控角度(°)
+										// 360°角度型舵机默认参数 [使用 vServoDeviceDefaultInit_Angle360() ]
+#define SERVO_DEFAULT_ANGLE_360_MAX					    360.0f                          // 360°舵机最大可控角度(°)
 #define SERVO_DEFAULT_PULSE_MIN						    500.0f							// 最小脉冲宽度(us)
 #define SERVO_DEFAULT_PULSE_MAX						    2500.0f							// 最大脉冲宽度(us)
 										// 360°连续旋转型舵机默认参数 [使用 vServoDeviceDefaultInit_360() ]
@@ -218,12 +223,25 @@ typedef enum
 #define QMC0                                            emQmcDevNum0
 
 
+/* 摇杆 相关 */
+#define JOYSTICK_IS_ENABLE                              0                               // 摇杆 模块总开关（依赖 ADC + SERVO）
+#define JOYSTICK_DEV_NUM                                1                               // 摇杆 设备数量
+#define JOYSTICK0                                       emJoystickDevNum0
+
+/* 摇杆 ADC 硬件配置（对应 empty.syscfg 中 ADC12_0 的配置） */
+#define JOYSTICK_ADC_DEV                                ADC_0                           // ADC 设备号（ADC12_0, sequence 模式, FIFO + DMA）
+#define JOYSTICK_ADC_X_CHANNEL                          0                               // X轴 DMA 缓存索引（MEM0, PA27, ADC12_INPUT_CHAN_0）
+#define JOYSTICK_ADC_Y_CHANNEL                          1                               // Y轴 DMA 缓存索引（MEM1, PA26, DL_ADC12_INPUT_CHAN_1）
+#define JOYSTICK_ADC_CLK_DIV                            DL_ADC12_CLOCK_DIVIDE_8         // 采样时钟分频（ULPCLK / 8）
+#define JOYSTICK_ADC_DMA_TRIGGER                        DL_ADC12_DMA_MEM1_RESULT_LOADED // DMA 触发源：最后一个通道转换完成
+
 /* Timer Controller 相关 */
 #define TIMER_CONTROLLER_IS_ENABLE                      1                               // Timer Controller 模块总开关
-#define TIMER_CONTROLLER_NUM                            1                               // 定时器对象数量
-#define ST_TIMER_CONTROLLER_TICK_TIM                    htim1                           // 1ms 定时器句柄(STM)
+#define TIMER_CONTROLLER_NUM                            2                               // 定时器对象数量
+#define ST_TIMER_CONTROLLER_TICK_TIM                    htim14                           // 1ms 定时器句柄(STM)
 /* 若使用TI平台，请在ti_interrupt.c 中传入定时器实例名 */
 #define TIMER0                                          emTimerDevNum0
+#define TIMER1                                          emTimerDevNum1
 
 
 /* HWT101 Z轴陀螺仪 相关 */
@@ -231,7 +249,7 @@ typedef enum
 #define HWT101_DEV_NUM                                 1                               // HWT101 设备数量
 #define HWT101_I2C_POLL_INTERVAL_MS                    10                              // I2C 轮询间隔(ms)
 #define HWT101_OFFLINE_TIMEOUT_MS                      500                             // 离线超时(ms)
-#define HWT101_0                                        emSensorHWT101DevNum0
+#define HWT101_0                                       emSensorHWT101DevNum0
 
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关

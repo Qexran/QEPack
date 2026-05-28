@@ -72,7 +72,7 @@ typedef struct
     #endif
 
 
-    fix32_t Tire_R;                             // 轮胎半径
+    fix32_t fWheelDiameterCm;                   // 轮子直径(cm), Q16.16
     emEncoderDevNumTdf emEncoderDevNum;         // 编码器设备号
 
     /* PID 绑定参数 */
@@ -166,6 +166,9 @@ void vGearMotorPosControl(
 void vGearMotorVelControl(
     void *pstMotor, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,
     uint8_t bSyncFlag);
+
+/* VTable 多机同步触发（减速电机无硬件同步，空操作） */
+void vGearMotorSynchronousMotion(void *pstMotor);
 
 /* 新增便捷接口 */
 void vGearMotorSetTargetSpeed(void *pstMotor, fix32_t fTargetRPM);

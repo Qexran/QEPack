@@ -23,6 +23,14 @@
     #include "ti_platform.h"
 #endif
 
+#ifndef ADC_REGULAR_RANK_1
+	#define ADC_REGULAR_RANK_1 1
+#endif
+
+#ifndef ADC_SAMPLETIME_55CYCLES_5
+	#define ADC_SAMPLETIME_55CYCLES_5 ADC_SAMPLETIME_56CYCLES
+#endif
+
 /// @brief          ADC设备号枚举
 typedef enum
 {

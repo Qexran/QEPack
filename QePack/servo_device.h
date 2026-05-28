@@ -14,12 +14,9 @@
 
 #include "string.h"
 #include "math.h"
-#include "arithmetic.h"
 
 #if (QEPACK_PLATFORM == TI)
 	#include "ti_platform.h"
-#else
-	#include "stm32f1xx_hal.h"
 #endif
 
 /// @brief          舵机设备号枚举
@@ -115,15 +112,27 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 	// 180°角度型舵机默认参数初始化（极速版）
 	void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
 
+	// 270°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle270(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
+
 	// 360°旋转型舵机默认参数初始化（极速版）
 	void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
+
+	// 360°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle360(emServoDevNumTdf emDevNum, stTimerTdf *stTimer, DL_TIMER_CC_INDEX emChannel);
 
 #else
 	// 180°角度型舵机默认参数初始化（极速版）
 	void vServoDeviceDefaultInit_Angle(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
 
+	// 270°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle270(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+
 	// 360°旋转型舵机默认参数初始化（极速版）
 	void vServoDeviceDefaultInit_360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
+
+	// 360°角度型舵机默认参数初始化（极速版）
+	void vServoDeviceDefaultInit_Angle360(emServoDevNumTdf emDevNum, TIM_HandleTypeDef *pstTimHandle, uint32_t ulChannel);
 #endif
 
 #endif /* _SERVO_DEVICE_H_ */
@@ -195,9 +204,9 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 		{
 			// 示例1：静态模式直接设角度
 			vServoSetValue(SERVO0, 45.0f);
-			QE_DELAY(1000);
+			HAL_Delay(1000);
 			vServoSetValue(SERVO0, 135.0f);
-			QE_DELAY(1000);
+			HAL_Delay(1000);
 			
 			// 示例2：平滑模式调速（需确保1ms调用一次vServoDevicePeriodExecute）
 			vServoSetMode(SERVO0, emServoMode_Smooth);
@@ -205,7 +214,7 @@ void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
 			for(int i=0; i<1000; i++) // 模拟1ms循环
 			{
 				vServoDevicePeriodExecute(SERVO0);
-				QE_DELAY(1);
+				HAL_Delay(1);
 			}
 		}
 	}

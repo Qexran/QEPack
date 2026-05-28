@@ -47,6 +47,19 @@
     #include "hwt101_device.h"
 #endif
 
+#if ULTRASONIC_IS_ENABLE
+    #include "ultrasonic_device.h"
+#endif
+
+
+#if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
+    #include "motor_system_controller.h"
+#endif
+
+#if JOYSTICK_IS_ENABLE
+    #include "joystick_device.h"
+#endif
+
 void vDevicePeriodExecute(void);
 
 #endif

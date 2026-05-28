@@ -83,6 +83,31 @@ fix32_t fix32_sqrt(fix32_t x)
     return (fix32_t)(result << (FIX32_FRAC_BITS / 2));
 }
 
+/**
+ * @brief 定点数线性映射，将值从 [fromLow, fromHigh] 映射到 [toLow, toHigh]
+ */
+fix32_t fix32_map(fix32_t fValue, fix32_t fFromLow, fix32_t fFromHigh, fix32_t fToLow, fix32_t fToHigh)
+{
+    fix32_t fFromRange = fFromHigh - fFromLow;
+    if (fFromRange == 0) return fToLow;
+    int64_t llNum = (int64_t)(fValue - fFromLow) * (int64_t)(fToHigh - fToLow);
+    return (fix32_t)(llNum / (int64_t)fFromRange) + fToLow;
+}
+
+/**
+ * @brief cm → 脉冲数转换
+ * @param fCm          目标距离(cm), Q16.16
+ * @param fDiameterCm  轮子直径(cm), Q16.16
+ * @param fPulsePerRev 编码器单圈脉冲数, Q16.16
+ * @return 脉冲数（整数），参数为 0 时返回 0
+ */
+int32_t lCmToPulse(fix32_t fCm, fix32_t fDiameterCm, fix32_t fPulsePerRev)
+{
+    if (fDiameterCm < FIX32_ONE || fPulsePerRev < FIX32_ONE) return 0;
+    fix32_t fCirc = fix32_mul(FIX32_PI, fDiameterCm);
+    return FIX32_TO_INT(fix32_mul(fix32_div(fCm, fCirc), fPulsePerRev));
+}
+
 /* ==================== 工具函数 ==================== */
 
 /**

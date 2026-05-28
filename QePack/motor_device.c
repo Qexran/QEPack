@@ -133,13 +133,27 @@ void vMotorVelControl(
  * @note   调用虚函数 vPosControl(...);  
  */
 void vMotorPosControl(
-    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc, 
+    uint8_t emDevNum, emMotorDirTdf emDir, uint16_t usVel, uint8_t ucAcc,
     uint32_t ulClk, uint8_t bAbsFlag, uint8_t bSyncFlag) {
     if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
         if (g_astMotorDevices[emDevNum]->pstVTable->vPosControl != NULL) {
             g_astMotorDevices[emDevNum]->pstVTable->vPosControl(
                 (void*)g_astMotorDevices[emDevNum], emDir, usVel, ucAcc, ulClk, bAbsFlag, bSyncFlag
             );
+        }
+    }
+}
+
+/**
+ * @brief  多机同步触发
+ * @param  emDevNum ：电机设备号
+ * @note   调用虚函数 vSynchronousMotion(void *pstMotor);
+ */
+void vMotorSynchronousMotion(uint8_t emDevNum)
+{
+    if (emDevNum < emMotorDevMax && g_astMotorDevices[emDevNum] != NULL && g_astMotorDevices[emDevNum]->pstVTable != NULL) {
+        if (g_astMotorDevices[emDevNum]->pstVTable->vSynchronousMotion != NULL) {
+            g_astMotorDevices[emDevNum]->pstVTable->vSynchronousMotion((void*)g_astMotorDevices[emDevNum]);
         }
     }
 }

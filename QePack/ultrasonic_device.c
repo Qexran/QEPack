@@ -45,6 +45,8 @@ void vUltrasonicDeviceRunningParamInit(stUltrasonicRunningParamTdf *pstInit, emU
  */
 void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevNumTdf emDevNum)
 {
+    if (emDevNum >= ULTRASONIC_DEV_NUM || pstInit == NULL) return;
+
     // 拷贝静态参数（硬件配置）
     memcpy(&astUltrasonicDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stUltrasonicStaticParamTdf));
     
@@ -54,7 +56,7 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
         .ucIsSuccess = 0,
         .ulCCR1 = 0,
         .ulCCR2 = 0,
-        .ulTimeoutMs = 50,    // 默认超时50ms
+        .ulTimeoutMs = 200,   // 默认超时200ms
         .fDistance = 0.0f,
         .ulExpireTime = 0,
 		.fTemperature = ULTRASONIC_DEFAULT_ENV_TEMP
@@ -134,20 +136,7 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
         return;
     }
     
-    // 1. 检查是否超时
-    if (QE_GET_TICK() >= pstRunning->ulExpireTime)
-    {
-        // 停止输入捕获
-        HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
-        HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
-        
-        // 更新状态
-        pstRunning->emCurrentStatus = emUltrasonicStatus_Timeout;
-        pstRunning->ucIsSuccess = 0;
-        return;
-    }
-    
-    // 2. 检查捕获标志（CH1和CH2均捕获到）
+    // 1. 先检查捕获标志（可能在上次轮询间隔中已完成）
     uint32_t ulCC1Flag = __HAL_TIM_GET_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC1);
     uint32_t ulCC2Flag = __HAL_TIM_GET_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC2);
     if (ulCC1Flag && ulCC2Flag)
@@ -155,17 +144,30 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
         // 读取捕获值
         pstRunning->ulCCR1 = HAL_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
         pstRunning->ulCCR2 = HAL_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
-        
+
         // 停止输入捕获
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
-        
+
         // 计算距离
         vUltrasonicCalcDistance(emDevNum);
-        
+
         // 更新状态
         pstRunning->emCurrentStatus = emUltrasonicStatus_Completed;
         pstRunning->ucIsSuccess = 1;
+        return;
+    }
+
+    // 2. 再检查是否超时（捕获未完成且超时，才算失败）
+    if (QE_GET_TICK() >= pstRunning->ulExpireTime)
+    {
+        // 停止输入捕获
+        HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+        HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+
+        // 更新状态
+        pstRunning->emCurrentStatus = emUltrasonicStatus_Timeout;
+        pstRunning->ucIsSuccess = 0;
     }
 }
 
