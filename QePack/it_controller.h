@@ -1,10 +1,10 @@
 /**
-  * @file       adc_device.h
+  * @file       it_controller.h
   * @author     Qe_xr
-  * @version    V1.0.0
-  * @date       2026/2/17
-  * @brief      ADC 转换驱动，基于 STM32 HAL 库
-  * 
+  * @version    V1.0.1
+  * @date       2026/5/29
+  * @brief      中断管理
+  *
   */
 #ifndef _IT_CONTROLLER_H_
 #define _IT_CONTROLLER_H_
@@ -61,5 +61,6 @@
 #endif
 
 void vDevicePeriodExecute(void);
+void vDevicePeriodExecuteMainLoop(void);
 
 #endif

@@ -13,13 +13,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     /* 1ms定时器 */
     #if TIMER_CONTROLLER_IS_ENABLE
         if(htim == &ST_TIMER_CONTROLLER_TICK_TIM)
+        {
             // 1ms 定时器实现
             vTimerTickHandler();
             // 模块循环实现
             vDevicePeriodExecute();
+        }
     #endif
-    
-    
+
+
     /* 编码器 */
     #if ENCODER_IS_ENABLE
         #if (ENCODER_HANDLE_PLAN == TIM)

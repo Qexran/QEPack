@@ -85,7 +85,7 @@ static float fServoValueToPulse(emServoDevNumTdf emDevNum, float fValue)
         // 反转（-100~0）：中位脉冲 -> 最小脉冲
         else
         {
-            return pstStatic->fPulseMid - (fabs(fValue) / 100.0f) *
+            return pstStatic->fPulseMid - (fabs(fValue) / SERVO_360_SPEED_MAX) *
                    (pstStatic->fPulseMid - pstStatic->fPulseMin);
         }
     }
@@ -127,8 +127,14 @@ static void vServoUpdatePwm(emServoDevNumTdf emDevNum, float fPulseUs)
 void vServoSetValue(emServoDevNumTdf emDevNum, float fValue)
 {
     if(emDevNum >= SERVO_DEV_NUM) return;
-    
-    // 1. 更新当前值
+
+    stServoStaticParamTdf *pstStatic = &astServoDeviceParam[emDevNum].stStaticParam;
+
+    // 1. 钳位到有效范围
+    if(fValue < pstStatic->fValueMin) fValue = pstStatic->fValueMin;
+    if(fValue > pstStatic->fValueMax) fValue = pstStatic->fValueMax;
+
+    // 2. 更新当前值
     astServoDeviceParam[emDevNum].stRunningParam.fCurrentValue = fValue;
     
     // 2. 值转脉冲并更新PWM

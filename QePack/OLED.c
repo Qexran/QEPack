@@ -250,7 +250,7 @@ void OLED_I2C_SendByte(emOledDevNumTdf emDevNum, uint8_t Byte)
 	void OLED_WriteCommand(emOledDevNumTdf emDevNum, uint8_t Command)
 	{
 		OLED_I2C_Start(emDevNum);				//I2C起始
-		OLED_I2C_SendByte(emDevNum, 0x78);		//发送OLED的I2C从机地址
+		OLED_I2C_SendByte(emDevNum, OLED_HARDWARE_I2C_ADDR);		//发送OLED的I2C从机地址
 		OLED_I2C_SendByte(emDevNum, 0x00);		//控制字节，给0x00，表示即将写命令
 		OLED_I2C_SendByte(emDevNum, Command);		//写入指定的命令
 		OLED_I2C_Stop(emDevNum);				//I2C终止
@@ -297,7 +297,7 @@ void OLED_I2C_SendByte(emOledDevNumTdf emDevNum, uint8_t Byte)
 	{
 		uint8_t i;
 		OLED_I2C_Start(emDevNum);				//I2C起始
-		OLED_I2C_SendByte(emDevNum, 0x78);		//发送OLED的I2C从机地址
+		OLED_I2C_SendByte(emDevNum, OLED_HARDWARE_I2C_ADDR);		//发送OLED的I2C从机地址
 		OLED_I2C_SendByte(emDevNum, 0x40);		//控制字节，给0x40，表示即将写数据
 		/*循环Count次，进行连续的数据写入*/
 		for (i = 0; i < Count; i ++)
@@ -328,14 +328,6 @@ void vOledDeviceInit(stOledStaticParamTdf *pstInit, emOledDevNumTdf emDevNum)
 	#if !OLED_IS_USE_HARDWARE
 		OLED_GPIO_Init(emDevNum);							//先调用底层的端口初始化
 	#endif
-	
-	uint16_t i, j;
-	
-	for (i = 0; i < 1000; i++)
-	{
-		for(j = 0; j < 1000; j++){
-		}
-	}
 
 	#if (OLED_IS_USE_HARDWARE == 0)
 		QE_DELAY(500);
@@ -710,6 +702,9 @@ void vOledReverseArea(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, uint8_t Wi
   */
 void vOledShowChar(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, emOledFontSizeTdf FontSize, char Char)
 {
+	/* 字符范围校验：仅支持 ASCII 可见字符 0x20~0x7E */
+	if (Char < ' ' || Char > '~') return;
+
 	if (FontSize == OLED_8X16)		//字体为宽8像素，高16像素
 	{
 		/*将ASCII字模库OLED_F8x16的指定数据以8*16的图像格式显示*/
@@ -735,7 +730,7 @@ void vOledShowChar(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, emOledFontSiz
   */
 void vOledShowString(emOledDevNumTdf emDevNum, uint8_t X, uint8_t Y, emOledFontSizeTdf FontSize, char *String)
 {
-	uint8_t i;
+	uint16_t i;
 	for (i = 0; String[i] != '\0'; i++)		//遍历字符串的每个字符
 	{
 		/*调用OLED_ShowChar函数，依次显示每个字符*/

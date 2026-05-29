@@ -22,6 +22,7 @@ stLedDeviceParamTdf astLedDeviceParam[LED_DEV_NUM];
  */
 const stLedDeviceParamTdf *c_pstGetLedDeviceParam(emLedDevNumTdf emDevNum)
 {
+    if(emDevNum >= LED_DEV_NUM) return NULL;
     return &astLedDeviceParam[emDevNum];
 }
 
@@ -32,6 +33,7 @@ const stLedDeviceParamTdf *c_pstGetLedDeviceParam(emLedDevNumTdf emDevNum)
  */
 void vLedDeviceRunningParamInit(stLedRunningParamTdf *pstInit, emLedDevNumTdf emDevNum)
 {
+    if(emDevNum >= LED_DEV_NUM) return;
     memcpy(&astLedDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stLedRunningParamTdf));
 }
 
@@ -95,7 +97,7 @@ void vLedToggle(emLedDevNumTdf emDevNum)
  * @param       emDevNum    ：设备编号
  * @note 		每循环一次，计数+1，当<=ON值时点亮，当<=ON+OFF值时熄灭
  */
-void vLedDeviceBilnkExecute(emLedDevNumTdf emDevNum)
+void vLedDeviceBlinkExecute(emLedDevNumTdf emDevNum)
 {
     // 1. 根据当前计数，更新状态和引脚输出
     if(astLedDeviceParam[emDevNum].stRunningParam.ulCurrentCount < astLedDeviceParam[emDevNum].stRunningParam.ulOnCountThreshold)
@@ -149,7 +151,7 @@ void vLedDeviceBreathExecute(emLedDevNumTdf emDevNum)
     uint32_t ulBreathCountMax;
     uint32_t ulBlinkPeriod;
 
-    vLedDeviceBilnkExecute(emDevNum);
+    vLedDeviceBlinkExecute(emDevNum);
 
     ulBlinkPeriod = pstRunning->ulOnCountThreshold + pstRunning->ulOffCountThreshold;
     if (ulBlinkPeriod == 0) return;
@@ -185,7 +187,7 @@ void vLedDevicePeriodExecute(emLedDevNumTdf emDevNum)
     {
         case emLedMode_Blink:
         {
-            vLedDeviceBilnkExecute(emDevNum);
+            vLedDeviceBlinkExecute(emDevNum);
             break;
         }
         case emLedMode_Breath:
@@ -208,8 +210,11 @@ void vLedDevicePeriodExecute(emLedDevNumTdf emDevNum)
  */
 void vLedDeviceInit(stLedStaticParamTdf *pstInit, emLedDevNumTdf emDevNum)
 {
+    if(emDevNum >= LED_DEV_NUM) return;
     // 1. 初始化静态参数
     memcpy(&astLedDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stLedStaticParamTdf));
+    // 2. 清零运行参数
+    memset(&astLedDeviceParam[emDevNum].stRunningParam, 0, sizeof(stLedRunningParamTdf));
 }
 
 #endif

@@ -327,6 +327,8 @@ static void vEmmMotorSendCmdEx(
 
     vUartSendArray(pstEmmMotor->stStaticParam.emUartDevNum, aucCmd, ucIndex);
     if (usDelayMs > 0) {
+        /* 警告：QE_DELAY 是阻塞延时，若在 ISR 上下文中调用会阻塞整个系统。
+         * 建议在主循环中调用此函数，或将 usDelayMs 设为 0 使用非阻塞模式。 */
         QE_DELAY(usDelayMs);
     }
 }

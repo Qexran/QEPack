@@ -18,6 +18,7 @@ stUartDeviceParamTdf astUartDeviceParam[UART_DEV_NUM];
 /// @note       返回值是只读指针
 const stUartDeviceParamTdf *c_pstGetUartDeviceParam(emUartDevNumTdf emDevNum)
 {
+    if(emDevNum >= UART_DEV_NUM) return NULL;
     return &astUartDeviceParam[emDevNum];
 }
 
@@ -26,6 +27,7 @@ const stUartDeviceParamTdf *c_pstGetUartDeviceParam(emUartDevNumTdf emDevNum)
 /// @param      emDevNum   ：设备号
 void vUartDeviceRunningParamInit(stUartRunningParamTdf *pstInit, emUartDevNumTdf emDevNum)
 {
+    if(emDevNum >= UART_DEV_NUM) return;
     memcpy(&astUartDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stUartRunningParamTdf));
 }
 

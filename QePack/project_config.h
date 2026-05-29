@@ -207,10 +207,6 @@ typedef enum
 #define W25Q64_TOTAL_SIZE                               (8 * 1024 * 1024)             // W25Q64 总容量（8MB）
 #define W25Q640                                         emW25q64DevNum0
 
-/** QMC5883 相关 */
-#define QMC5883_IS_ENABLE                               0                               // QMC5883 模块总开关
-#define QMC_DEV_NUM                                     1                               // QMC5883 设备数量
-
 /** HC05 蓝牙模块 相关 */
 #define HC05_IS_ENABLE                                  1                               // HC05 蓝牙模块总开关
 #define HC05_DEV_NUM                                    1                               // HC05 设备数量

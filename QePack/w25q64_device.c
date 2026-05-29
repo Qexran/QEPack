@@ -18,6 +18,7 @@ stW25q64DeviceParamTdf astW25q64DeviceParam[W25Q64_DEV_NUM];
  */
 const stW25q64DeviceParamTdf *c_pstGetW25q64DeviceParam(emW25q64DevNumTdf emDevNum)
 {
+    if(emDevNum >= W25Q64_DEV_NUM) return NULL;
     return &astW25q64DeviceParam[emDevNum];
 }
 
@@ -127,7 +128,8 @@ uint32_t ulW25q64ReadId(emW25q64DevNumTdf emDevNum)
     astW25q64DeviceParam[emDevNum].stRunningParam.ulManufacturerId = id_buf[0];
     astW25q64DeviceParam[emDevNum].stRunningParam.ulMemoryType = id_buf[1];
     astW25q64DeviceParam[emDevNum].stRunningParam.ulCapacityId = id_buf[2];
-    astW25q64DeviceParam[emDevNum].stRunningParam.ulTotalCapacity = 1UL << (id_buf[2] - 0x10);
+    astW25q64DeviceParam[emDevNum].stRunningParam.ulTotalCapacity =
+        (id_buf[2] >= 0x10) ? (1UL << (id_buf[2] - 0x10)) : 0;
     
     return (id_buf[0] << 16) | (id_buf[1] << 8) | id_buf[2];
 }

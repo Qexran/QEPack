@@ -33,6 +33,7 @@
 
 #define I2C_TIMEOUT_MS  10
 #define Q30             (1073741824.0f)
+#define RAD_TO_DEG      (180.0f / 3.14159265f)
 
 static stMpu6050DeviceParamTdf g_astMpu6050DeviceParam[MPU6050_DEV_NUM];
 static const signed char g_scGyroOrientation[9] = {-1, 0, 0, 0, -1, 0, 0, 0, 1};
@@ -236,22 +237,38 @@ QE_StatusTypeDef emMpu6050DeviceInit(emMpu6050DevNumTdf emDevNum, const stMpu605
     }
 
     /* mpu_init 会调用 i2c_write 读取 WHO_AM_I 进行验证 */
+    /* 禁用中断防止 ISR 中的 emMpu6050ReadDmp 修改 g_emActiveDevNum 导致竞态 */
+    __disable_irq();
     g_emActiveDevNum = emDevNum;
-    if (mpu_init() != 0) return QE_ERROR;
+    if (mpu_init() != 0) { __enable_irq(); return QE_ERROR; }
+    __enable_irq();
 
     int result = 0;
     unsigned short gyro_rate, gyro_fsr;
     unsigned char accel_fsr;
     uint16_t usRate = pstInit->usSampleRateHz ? pstInit->usSampleRateHz : 50;
 
+    __disable_irq();
+    g_emActiveDevNum = emDevNum;
     result |= mpu_set_sensors(INV_XYZ_GYRO | INV_XYZ_ACCEL);
+    __enable_irq();
+
+    __disable_irq();
+    g_emActiveDevNum = emDevNum;
     result |= mpu_configure_fifo(INV_XYZ_GYRO | INV_XYZ_ACCEL);
+    __enable_irq();
+
+    __disable_irq();
+    g_emActiveDevNum = emDevNum;
     result |= mpu_set_sample_rate(usRate);
     result |= mpu_get_sample_rate(&gyro_rate);
     result |= mpu_get_gyro_fsr(&gyro_fsr);
     result |= mpu_get_accel_fsr(&accel_fsr);
+    __enable_irq();
 
     /* 加载 DMP 固件 */
+    __disable_irq();
+    g_emActiveDevNum = emDevNum;
     result |= dmp_load_motion_driver_firmware();
     result |= dmp_set_orientation(usInvOrientationToScalar(g_scGyroOrientation));
     result |= dmp_register_tap_cb(vDmpTapCb);
@@ -261,6 +278,7 @@ QE_StatusTypeDef emMpu6050DeviceInit(emMpu6050DevNumTdf emDevNum, const stMpu605
                                   DMP_FEATURE_SEND_CAL_GYRO | DMP_FEATURE_GYRO_CAL);
     result |= dmp_set_fifo_rate(usRate);
     result |= mpu_set_dmp_state(1);
+    __enable_irq();
 
     if (result != 0) return QE_ERROR;
 
@@ -335,9 +353,9 @@ static void vMpu6050ComputeAttitude(emMpu6050DevNumTdf emDevNum)
     pstRun->stQuat.fQ2 = fQ2;
     pstRun->stQuat.fQ3 = fQ3;
 
-    pstRun->stAttitude.fPitch = asinf(-2.0f * fQ1 * fQ3 + 2.0f * fQ0 * fQ2) * 57.3f;
-    pstRun->stAttitude.fRoll  = atan2f(2.0f * fQ2 * fQ3 + 2.0f * fQ0 * fQ1, -2.0f * fQ1 * fQ1 - 2.0f * fQ2 * fQ2 + 1.0f) * 57.3f;
-    pstRun->stAttitude.fYaw   = atan2f(2.0f * (fQ1 * fQ2 + fQ0 * fQ3), fQ0 * fQ0 + fQ1 * fQ1 - fQ2 * fQ2 - fQ3 * fQ3) * 57.3f;
+    pstRun->stAttitude.fPitch = asinf(-2.0f * fQ1 * fQ3 + 2.0f * fQ0 * fQ2) * RAD_TO_DEG;
+    pstRun->stAttitude.fRoll  = atan2f(2.0f * fQ2 * fQ3 + 2.0f * fQ0 * fQ1, -2.0f * fQ1 * fQ1 - 2.0f * fQ2 * fQ2 + 1.0f) * RAD_TO_DEG;
+    pstRun->stAttitude.fYaw   = atan2f(2.0f * (fQ1 * fQ2 + fQ0 * fQ3), fQ0 * fQ0 + fQ1 * fQ1 - fQ2 * fQ2 - fQ3 * fQ3) * RAD_TO_DEG;
     pstRun->ucAttitudeDirty = 0;
 }
 

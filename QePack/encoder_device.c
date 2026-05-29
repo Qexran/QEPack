@@ -35,6 +35,7 @@ const stEncoderDeviceParamTdf *c_pstGetEncoderDeviceParam(emEncoderDevNumTdf emD
  */
 fix32_t fixMedianFilter(fix32_t fValue, fix32_t* afBuffer, uint8_t u8BufferSize)
 {
+    if (u8BufferSize == 0 || afBuffer == NULL) return fValue;
     for (int i = u8BufferSize - 1; i > 0; i--) {
         afBuffer[i] = afBuffer[i - 1];
     }
@@ -207,7 +208,7 @@ void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
      */
     if (pstStatic->fWheelDiameterMm > FIX32_ZERO) {
         fix32_t fGear = (pstStatic->fGearRatio > FIX32_ZERO) ? pstStatic->fGearRatio : FIX32_ONE;
-        fix32_t fDenom = (fix32_t)((int64_t)((int32_t)pstStatic->Roto_Ratio * (int32_t)pstStatic->A_Round_Count) * 65536);
+        fix32_t fDenom = (fix32_t)((int64_t)pstStatic->Roto_Ratio * (int64_t)pstStatic->A_Round_Count * 65536);
         fDenom = fix32_mul(fDenom, fGear);
         fix32_t fDelta = (fix32_t)((int64_t)delta * 65536);
         fix32_t fDist  = fix32_mul(fix32_mul(fDelta, pstStatic->fWheelDiameterMm), FIX32_3_14159);
@@ -221,7 +222,7 @@ void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
      */
     int32_t lRotoCounts = (int32_t)pstStatic->Roto_Ratio * (int32_t)pstStatic->A_Round_Count;
     if (lRotoCounts == 0) lRotoCounts = 1;
-    int32_t lSpeedRaw = delta * (60000 / (int32_t)ENCODER_HANDLE_FREQ) / lRotoCounts;
+    int32_t lSpeedRaw = delta * 60000 / (int32_t)ENCODER_HANDLE_FREQ / lRotoCounts;
     pstRunning->fSpeed = (fix32_t)((int64_t)lSpeedRaw * 65536);
 
     if (pstStatic->fGearRatio > FIX32_ZERO) {

@@ -5,7 +5,6 @@
 #include "ti_msp_dl_config.h"
 
 volatile unsigned long tick_ms;
-volatile uint32_t start_time;
 static uint8_t is_initialed_clock = 0;
 
 /**
@@ -19,7 +18,7 @@ void SysTick_Handler(void)
 
 void TI_Delay(unsigned long num_ms)
 {
-    start_time = tick_ms;
+    volatile unsigned long start_time = tick_ms;
     while (tick_ms - start_time < num_ms);
 }
 
@@ -408,27 +407,25 @@ uint32_t TI_GetTick(void)
 }
 
 
-void vTiClearFlashDebris(void)
+void vTiClearFlashDebris(uint32_t ulSectorAddr)
 {
-   // SysTick_Init();
-    
     // 1. 关闭全局中断，防止Flash操作被打断
     __disable_irq();
 
     // 2. 清除Flash错误状态位
     DL_FlashCTL_executeClearStatus(FLASHCTL);
 
-    // 3. 解锁最后一个安全扇区 0x0001F000
+    // 3. 解锁目标扇区
     DL_FlashCTL_unprotectSector(
         FLASHCTL,
-        0x0001F000,
+        ulSectorAddr,
         DL_FLASHCTL_REGION_SELECT_MAIN
     );
 
     // 4. 扇区擦除
     DL_FlashCTL_eraseMemory(
         FLASHCTL,
-        0x0001F000,
+        ulSectorAddr,
         DL_FLASHCTL_COMMAND_SIZE_SECTOR
     );
 
@@ -441,7 +438,7 @@ void vTiClearFlashDebris(void)
     // 6. 重新加锁扇区，保护Flash
     DL_FlashCTL_protectSector(
         FLASHCTL,
-        0x0001F000,
+        ulSectorAddr,
         DL_FLASHCTL_REGION_SELECT_MAIN
     );
 

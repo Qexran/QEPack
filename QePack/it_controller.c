@@ -1,15 +1,16 @@
 /**
-  * @file       adc_device.h
+  * @file       it_controller.c
   * @author     Qe_xr
-  * @version    V1.0.0
-  * @date       2026/2/17
+  * @version    V1.0.1
+  * @date       2026/5/29
   * @brief      中断管理
-  * 
+  *
   */
 #include "it_controller.h"
 
 /**
- * @brief       设备周期更新函数
+ * @brief       设备周期更新函数（在 1ms 定时器 ISR 中调用）
+ * @note        仅调用 ISR 安全的模块，不可调用 I2C 等阻塞操作
  */
 void vDevicePeriodExecute(){
     /* KEY */
@@ -244,29 +245,33 @@ void vDevicePeriodExecute(){
         #endif
     #endif
 
-    #if HWT101_IS_ENABLE
-        /* 注： I2C 模式不可在 ISR 中调用 */
-        #ifdef HWT101_0 
-            vSensorPeriodExecute(HWT101_0);
-        #endif
-        #ifdef HWT101_1 
-            vSensorPeriodExecute(HWT101_1);
-        #endif
-    #endif
-    
-    #if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
-        vMotorSystemPeriodExecute();
-    #endif
-	
-	
     #if JOYSTICK_IS_ENABLE
         #ifdef JOYSTICK0
             /* 读取摇杆数据 */
             vJoystickPeriodExecute(JOYSTICK0);
         #endif
     #endif
-    
 
+}
+
+/**
+ * @brief       主循环周期更新函数（在 main while(1) 中调用）
+ * @note        用于需要阻塞 I2C 等操作的模块（传感器、电机系统控制器）
+ */
+void vDevicePeriodExecuteMainLoop(void)
+{
+    #if HWT101_IS_ENABLE
+        #ifdef HWT101_0
+            vSensorPeriodExecute(HWT101_0);
+        #endif
+        #ifdef HWT101_1
+            vSensorPeriodExecute(HWT101_1);
+        #endif
+    #endif
+
+    #if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
+        vMotorSystemPeriodExecute();
+    #endif
 }
 
 

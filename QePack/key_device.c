@@ -22,6 +22,7 @@ stKeyDeviceParamTdf astKeyDeviceParam[KEY_DEV_NUM];
  */
 const stKeyDeviceParamTdf *c_pstGetKeyDeviceParam(emKeyDevNumTdf emDevNum)
 {
+    if(emDevNum >= KEY_DEV_NUM) return NULL;
     return &astKeyDeviceParam[emDevNum];
 }
 
@@ -32,6 +33,7 @@ const stKeyDeviceParamTdf *c_pstGetKeyDeviceParam(emKeyDevNumTdf emDevNum)
  */
 void vKeyDeviceRunningParamInit(stKeyRunningParamTdf *pstInit, emKeyDevNumTdf emDevNum)
 {
+    if(emDevNum >= KEY_DEV_NUM) return;
     memcpy(&astKeyDeviceParam[emDevNum].stRunningParam, pstInit, sizeof(stKeyRunningParamTdf));
 }
 
@@ -42,8 +44,9 @@ void vKeyDeviceRunningParamInit(stKeyRunningParamTdf *pstInit, emKeyDevNumTdf em
  */
 void vKeyDeviceInit(stKeyStaticParamTdf *pstInit, emKeyDevNumTdf emDevNum)
 {
+    if(emDevNum >= KEY_DEV_NUM) return;
     memcpy(&astKeyDeviceParam[emDevNum].stStaticParam, pstInit, sizeof(stKeyStaticParamTdf));
-	
+
 	/* 运行参数默认初始化 */
 	memset(&astKeyDeviceParam[emDevNum].stRunningParam, 0, sizeof(stKeyRunningParamTdf));
 }

@@ -177,7 +177,7 @@ static void vGearMotorPosPeriodExecute(stGearMotorDeviceParamTdf *pstMotorDev)
                       * (int64_t)lCountsPerRev;
         int64_t llDen = (int64_t)120000 * (int64_t)fDecStep;
         if (llDen > 0) {
-            lDecelPulses = (int32_t)((llNum / llDen) >> FIX32_FRAC_BITS);
+            lDecelPulses = (int32_t)((llNum >> FIX32_FRAC_BITS) / llDen);
         } else {
             lDecelPulses = 1;
         }

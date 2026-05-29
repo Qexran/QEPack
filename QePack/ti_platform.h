@@ -150,7 +150,7 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
 
 void TI_ADC_Start(stAdcTdf *pstAdcBase);
 
-void vTiClearFlashDebris();
+void vTiClearFlashDebris(uint32_t ulSectorAddr);
 
 
 #endif

@@ -191,7 +191,7 @@ QE_StatusTypeDef vLinerCcdReadData(emLinerCcdDevNumTdf emDevNum)
         // 调节曝光时间
         Dly_us(LINER_CCD_EXPOSURE_TIME);
         
-        usLinerCcdReadAdc(emDevNum);
+        if(usLinerCcdReadAdc(emDevNum) != QE_OK) return QE_ERROR;
 
         pstRunning->ausPixelData[i] = pstRunning->adcValue >> 4;
         
@@ -215,13 +215,13 @@ QE_StatusTypeDef vLinerCcdCalculateThreshold(emLinerCcdDevNumTdf emDevNum)
     #endif
     stLinerCcdRunningParamTdf *pstRunning = &astLinerCcdDeviceParam[emDevNum].stRunningParam;
     
-    uint8_t ucStart = 0 + LINER_CCD_NEGLECT_THREHOLD;
-    uint8_t ucEnd = LINER_CCD_PIXEL_COUNT - LINER_CCD_NEGLECT_THREHOLD;;
+    uint16_t ucStart = 0 + LINER_CCD_NEGLECT_THREHOLD;
+    uint16_t ucEnd = LINER_CCD_PIXEL_COUNT - LINER_CCD_NEGLECT_THREHOLD;
 
     uint16_t usMax = pstRunning->ausPixelData[ucStart];
     uint16_t usMin = pstRunning->ausPixelData[ucStart];
-    
-    for (uint8_t i = ucStart; i <= ucEnd; i++) {
+
+    for (uint16_t i = ucStart; i <= ucEnd; i++) {
         if (pstRunning->ausPixelData[i] > usMax) {
             usMax = pstRunning->ausPixelData[i];
         }
@@ -274,8 +274,8 @@ QE_StatusTypeDef vLinerCcdFindCenterLine(emLinerCcdDevNumTdf emDevNum)
         }
     }
     
-    //寻找右边跳变沿，连续三个黑像素后连续三个白像素判断左边跳变沿
-    for (int16_t j = ucEnd; j > (int16_t)ucStart + 5; j--) {
+    //寻找右边跳变沿，连续三个黑像素后连续三个白像素判断右边跳变沿
+    for (int16_t j = ucEnd - 5; j > (int16_t)ucStart + 5; j--) {
         if (pstRunning->ausPixelData[j] < usThreshold &&
             pstRunning->ausPixelData[j + 1] < usThreshold &&
             pstRunning->ausPixelData[j + 2] < usThreshold &&

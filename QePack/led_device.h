@@ -94,7 +94,7 @@ typedef struct
     emLedModeTdf        emMode;                 // 模式
 	
 	
-    /* LED闪烁相关函数: vLedDeviceBilnkExecute */
+    /* LED闪烁相关函数: vLedDeviceBlinkExecute */
     uint32_t            ulCurrentCount;         // 当前计数
     uint32_t            ulOnCountThreshold;     // ON  计数阈值
     uint32_t            ulOffCountThreshold;    // OFF 计数阈值
