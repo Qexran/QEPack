@@ -87,7 +87,7 @@ typedef enum
 #define OLED0                                           emOledDevNum0
 
 /* 超声波测距 相关 */
-#define ULTRASONIC_IS_ENABLE							0							    // 超声波 模块开关
+#define ULTRASONIC_IS_ENABLE							1							    // 超声波 模块开关
 #define ULTRASONIC_DEV_NUM        						1               			    // 超声波 设备数量
 #define ULTRASONIC_DEFAULT_ENV_TEMP 					25.0f						    // 超声波 环境默认温度	(若有温度传感器时应给运行参数赋值)
 #define ULTRASONIC_SOUND_SPEED_BASE 					331.3f						    // 超声波 声速基准值 	(0°C 时的声速, m/s)
@@ -118,7 +118,7 @@ typedef enum
 #define SERVO1                                          emServoDevNum1
 
 /* ADC 相关 */
-#define ADC_DEVICE_IS_ENABLE							0								// ADC 模块总开关
+#define ADC_DEVICE_IS_ENABLE							1								// ADC 模块总开关
 #define ADC_IS_USE_DMA                                  0                               // ADC 是否使用DMA功能
 #define ADC_RESOLUTION                                  4095                            // ADC 精度(12位: 2^12 - 1)
 #define ADC_VREF                                        3.3                             // ADC 电压
@@ -136,7 +136,7 @@ typedef enum
 #define ENCODER_0                                       emEncoderDevNum0
 
 /* 线性CCD 相关 */
-#define LINEAR_CCD_IS_ENABLE                            0                               // 线性CCD 模块总开关
+#define LINEAR_CCD_IS_ENABLE                            1                               // 线性CCD 模块总开关
 #define LINER_CCD_DEV_NUM                               1                               // 线性CCD 设备数量
 #define LINER_CCD_PIXEL_COUNT                           128                             // 线性CCD 像素数量
 #define LINER_CCD_EXPOSURE_TIME                         2                               // 线性CCD 曝光时间
