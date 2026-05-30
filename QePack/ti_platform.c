@@ -407,43 +407,50 @@ uint32_t TI_GetTick(void)
 }
 
 
-void vTiClearFlashDebris(uint32_t ulSectorAddr)
+void vTiClearFlashDebris()
 {
     // 1. 关闭全局中断，防止Flash操作被打断
+    uint32_t primask = __get_PRIMASK();
     __disable_irq();
 
-    // 2. 清除Flash错误状态位
+    // 2. 清除Flash错误状态位（≥32MHz 时必须在每次 Flash 操作前调用）
     DL_FlashCTL_executeClearStatus(FLASHCTL);
 
     // 3. 解锁目标扇区
     DL_FlashCTL_unprotectSector(
         FLASHCTL,
-        ulSectorAddr,
+        FLASH_STATUS_ADDR,
         DL_FLASHCTL_REGION_SELECT_MAIN
     );
 
-    // 4. 扇区擦除
+    // 4. 再次清除状态，防止解锁操作残留标志
+    DL_FlashCTL_executeClearStatus(FLASHCTL);
+
+    // 5. 扇区擦除
     DL_FlashCTL_eraseMemory(
         FLASHCTL,
-        ulSectorAddr,
+        FLASH_STATUS_ADDR,
         DL_FLASHCTL_COMMAND_SIZE_SECTOR
     );
 
-    // 5. 等待 Flash 擦除完成（硬件状态轮询 + 超时保护）
+    // 6. 等待 Flash 擦除完成（硬件状态轮询 + 超时保护）
     {
         volatile uint32_t ulFlashTimeout = 100000;
         while (ulFlashTimeout-- && DL_FlashCTL_getCommandStatus(FLASHCTL) == DL_FLASHCTL_COMMAND_STATUS_IN_PROGRESS);
     }
 
-    // 6. 重新加锁扇区，保护Flash
+    // 7. 擦除完成后清除残留状态，确保后续 Program 操作不会误判
+    DL_FlashCTL_executeClearStatus(FLASHCTL);
+
+    // 8. 重新加锁扇区，保护Flash
     DL_FlashCTL_protectSector(
         FLASHCTL,
-        ulSectorAddr,
+        FLASH_STATUS_ADDR,
         DL_FLASHCTL_REGION_SELECT_MAIN
     );
 
-    // 7. 恢复全局中断
-    __enable_irq();
+    // 9. 恢复全局中断
+    __set_PRIMASK(primask);
 }
 
 #if UART_IS_USE_DMA

@@ -24,7 +24,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     /* 编码器 */
     #if ENCODER_IS_ENABLE
-        #if (ENCODER_HANDLE_PLAN == TIM)
+        #if (ENCODER_HANDLE_PLAN == QEPACK_TIM)
             vEncoder_Handler(htim);        // 溢出中断
         #endif
 

@@ -27,7 +27,11 @@ static fix32_t fCalculateIntegralCoefficient(stPidStaticParamTdf *pstStatic, fix
 
     if (pstStatic->EnableVariableIntegral) {
         fix32_t fBeta = pstStatic->VariableIntegralBeta;
-        fCoefficient = fix32_div(FIX32_ONE, FIX32_ONE + fix32_mul(fBeta, fAbsError));
+        fix32_t fDenom = FIX32_ONE + fix32_mul(fBeta, fAbsError);
+        if (fDenom <= FIX32_ZERO) {
+            return FIX32_ONE;
+        }
+        fCoefficient = fix32_div(FIX32_ONE, fDenom);
     }
 
     return fCoefficient;

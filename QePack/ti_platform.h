@@ -7,6 +7,8 @@ extern volatile unsigned long tick_ms;
 
 #include "project_config.h"
 
+#define FLASH_STATUS_ADDR 0x0001F000
+
 /**
  * @brief GPIO引脚状态枚举
  */
@@ -150,7 +152,7 @@ void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinStat
 
 void TI_ADC_Start(stAdcTdf *pstAdcBase);
 
-void vTiClearFlashDebris(uint32_t ulSectorAddr);
+void vTiClearFlashDebris();
 
 
 #endif

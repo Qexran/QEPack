@@ -10,10 +10,11 @@
 #ifndef _PROJECT_CONFIG_H_
 #define _PROJECT_CONFIG_H_
 
-#define GPIO                0                           // 占位符
-#define TIM                 1                           // 占位符
-#define TI                  0                           // 占位符
-#define ST                  1                           // 占位符
+/* 注意：GPIO/TI/ST 宏名较短，若与平台 HAL 冲突请改用 QEPACK_ 前缀 */
+#define GPIO                0                           // 占位符（编码器方案选择）
+#define QEPACK_TIM          1                           // 占位符（编码器方案选择，改名前为 TIM）
+#define TI                  0                           // 占位符（平台选择）
+#define ST                  1                           // 占位符（平台选择）
 
 /**
  * @brief 全局状态枚举
@@ -131,7 +132,7 @@ typedef enum
 #define ENCODER_HANDLE_FREQ                             50                              // 编码器处理数据的时间 (ms)
 #define ENCODER_IS_USE_PARASITISM                       0                               // 使用寄生的定时器处理数据
                             /* tips:对于GPIO模式，应一引脚设置外部中断，一引脚设置输入模式 */
-#define ENCODER_HANDLE_PLAN                             GPIO                            // 编码器处理方案 (TIM/GPIO)
+#define ENCODER_HANDLE_PLAN                             GPIO                            // 编码器处理方案 (QEPACK_TIM/GPIO)
 #define ENCODER_DEV_NUM    							                1							                  // 编码器 数量
 #define ENCODER_0                                       emEncoderDevNum0
 
@@ -196,8 +197,8 @@ typedef enum
 
 /* ATK_MS901M 相关 */
 #define ATK_MS901M_IS_ENABLE                            1                               // ATK_MS901M 模块总开关
-#define ATK_MS901M_DEV_NUM                              1                               // W25Q64 设备数量
-#define ATK_MS901M0                                     emAtkMs901mDevNum0                               // W25Q64 设备数量
+#define ATK_MS901M_DEV_NUM                              1                               // ATK_MS901M 设备数量
+#define ATK_MS901M0                                     emAtkMs901mDevNum0                               // ATK_MS901M 设备别名
 
 /* W25Q64 Flash 相关 */
 #define W25Q64_IS_ENABLE                                0                               // W25Q64 模块总开关

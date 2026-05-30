@@ -67,7 +67,7 @@ static int32_t lEncoderGetEncoder(emEncoderDevNumTdf emDevNum)
         stEncoderStaticParamTdf  *pstStatic = &astEncoderDeviceParam[emDevNum].stStaticParam;
     #endif
     
-    #if (ENCODER_HANDLE_PLAN == TIM) // TIM
+    #if (ENCODER_HANDLE_PLAN == QEPACK_TIM) // QEPACK_TIM
         return ( int32_t )
             __HAL_TIM_GET_COUNTER(
                 pstStatic->pstTimerBase
@@ -134,7 +134,7 @@ void vEncoderDeviceInit(stEncoderStaticParamTdf *pstInit, emEncoderDevNumTdf emD
     
 
     /** 与编码器直接对应的定时器 */
-    #if (ENCODER_HANDLE_PLAN == TIM) // TIM
+    #if (ENCODER_HANDLE_PLAN == QEPACK_TIM) // QEPACK_TIM
         // 启动编码器定时器
         if (HAL_TIM_Encoder_Start_IT(pstStatic->pstTimerBase, TIM_CHANNEL_ALL) != HAL_OK) {
             while(1);
@@ -197,6 +197,7 @@ fix32_t fEncoderGetSpeed(emEncoderDevNumTdf emDevNum){
 void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
 {
     if (emDevNum >= ENCODER_DEV_NUM) return;
+    if (ENCODER_HANDLE_FREQ == 0) return;
     stEncoderRunningParamTdf *pstRunning = &astEncoderDeviceParam[emDevNum].stRunningParam;
     stEncoderStaticParamTdf  *pstStatic  = &astEncoderDeviceParam[emDevNum].stStaticParam;
 
@@ -222,7 +223,7 @@ void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
      */
     int32_t lRotoCounts = (int32_t)pstStatic->Roto_Ratio * (int32_t)pstStatic->A_Round_Count;
     if (lRotoCounts == 0) lRotoCounts = 1;
-    int32_t lSpeedRaw = delta * 60000 / (int32_t)ENCODER_HANDLE_FREQ / lRotoCounts;
+    int32_t lSpeedRaw = (int32_t)((int64_t)delta * 60000 / (int32_t)ENCODER_HANDLE_FREQ / lRotoCounts);
     pstRunning->fSpeed = (fix32_t)((int64_t)lSpeedRaw * 65536);
 
     if (pstStatic->fGearRatio > FIX32_ZERO) {
@@ -303,7 +304,7 @@ void vEncoderCalculateSpeed(emEncoderDevNumTdf emDevNum)
 //    return NOT_UPDATE;
 //}
 
-#if (ENCODER_HANDLE_PLAN == TIM) // TIM
+#if (ENCODER_HANDLE_PLAN == QEPACK_TIM) // QEPACK_TIM
 /**
  * @brief       编码器溢出处理函数
  * @param       htim:定时器句柄指针
@@ -359,10 +360,13 @@ void vEncoder_Handler(emEncoderDevNumTdf emDevNum)
     );
 
     if (pstStatic->ucNumberofEdgesToDetect == 1) {
-        /* 单边沿模式：中断中直接更新位置并清零 */
+        /* 单边沿模式：中断中直接更新位置并清零，关中断防止与 Timer ISR 竞争 */
+        uint32_t primask = __get_PRIMASK();
+        __disable_irq();
         pstRunning->TotalPosition +=
             pstRunning->direction_map[pstRunning->emCurrentPinState];
         pstStatic->pstCompareTimerBase->timer_inst->COUNTERREGS.CTR = 0;
+        __set_PRIMASK(primask);
     } else {
         /* 多边沿模式：只标记，不清零，由 lEncoderGetEncoder 处理累积值 */
         if(!pstRunning->isDoneAInterrupt) pstRunning->isDoneAInterrupt = 1;

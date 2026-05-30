@@ -42,7 +42,7 @@ typedef enum {
 
 /** @brief 编码器静态参数定义 */
 typedef struct {
-    #if ENCODER_HANDLE_PLAN // TIM
+    #if ENCODER_HANDLE_PLAN // QEPACK_TIM
 
         #if (QEPACK_PLATFORM == TI)                     // 编码器定时器句柄
             stTimerTdf *pstTimerBase;
@@ -137,7 +137,7 @@ void vEncoderStartTimer(emEncoderDevNumTdf emDevNum, uint32_t u32Period);
 
 
 
-#if (ENCODER_HANDLE_PLAN == TIM) // TIM
+#if (ENCODER_HANDLE_PLAN == QEPACK_TIM) // QEPACK_TIM
     void vEncoder_Handler(TIM_HandleTypeDef *htim);
 #else
     #if (QEPACK_PLATFORM == TI)
