@@ -269,6 +269,30 @@ void vDevicePeriodExecuteMainLoop(void)
         #endif
     #endif
 
+    #if MPU6050_IS_ENABLE
+        #ifdef MPU6050_SENSOR_0
+            vSensorPeriodExecute(MPU6050_SENSOR_0);
+        #endif
+    #endif
+
+    #if IMU660RB_IS_ENABLE
+        #ifdef IMU660RB_SENSOR_0
+            vSensorPeriodExecute(IMU660RB_SENSOR_0);
+        #endif
+    #endif
+
+    #if BNO08X_IS_ENABLE
+        #ifdef BNO08X_SENSOR_0
+            vSensorPeriodExecute(BNO08X_SENSOR_0);
+        #endif
+    #endif
+
+    #if ULTRASONIC_IS_ENABLE
+        #ifdef ULTR0
+            vSensorPeriodExecute(ULTR0);
+        #endif
+    #endif
+
     #if MOTOR_SYSTEM_CONTROLLER_IS_ENABLE
         vMotorSystemPeriodExecute();
     #endif

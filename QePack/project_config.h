@@ -248,6 +248,21 @@ typedef enum
 #define HWT101_OFFLINE_TIMEOUT_MS                      500                             // 离线超时(ms)
 #define HWT101_0                                       emSensorHWT101DevNum0
 
+/* MPU6050 传感器设备别名 */
+#ifdef MPU6050_IS_ENABLE
+    #define MPU6050_SENSOR_0                             emSensorMPU6050DevNum0
+#endif
+
+/* IMU660RB 传感器设备别名 */
+#ifdef IMU660RB_IS_ENABLE
+    #define IMU660RB_SENSOR_0                            emSensor660RBDevNum0
+#endif
+
+/* BNO08X 传感器设备别名 */
+#ifdef BNO08X_IS_ENABLE
+    #define BNO08X_SENSOR_0                              emSensorNBO08XDevNum0
+#endif
+
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关
 #define STEP_M_MAX_STEP_NUM                             20                              // 最大步骤数量
