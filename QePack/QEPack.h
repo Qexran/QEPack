@@ -110,6 +110,10 @@
     #include "hmi_device.h"
 #endif
 
+#if ARM_CONTROLLER_IS_ENABLE
+    #include "arm_controller.h"
+#endif
+
 // 生成配置结构体
 #define TI_GET_I2C_STRUCTURE(I2C_NAME) \
     (stI2CTdf){ \

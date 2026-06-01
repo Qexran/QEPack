@@ -38,6 +38,7 @@ typedef enum
 {
     emServoMode_Static        = 0,            // 静态模式（直接设置角度/速度）
     emServoMode_Smooth,                       // 平滑调速模式（按指定速度调整到目标值）
+    emServoMode_SmoothStep,                   // S 曲线平滑模式（基于时间的五次赫米特插值）
 } emServoModeTdf;
 
 /// @brief          舵机类型枚举
@@ -75,6 +76,9 @@ typedef struct
     float               fCurrentValue;       // 当前值（180°=角度，360°=速度）
     float               fTargetValue;        // 目标值（180°=角度，360°=速度）
     float               fSpeed;              // 平滑调速时的速度（°/ms 或 速度值/ms）
+    float               fStartValue;         // S 曲线起始值
+    uint32_t            ulSmoothStepDurationMs;  // S 曲线运动总时长(ms)
+    uint32_t            ulSmoothStepElapsedMs;   // S 曲线已用时间(ms)
 } stServoRunningParamTdf;
 
 /// @brief          舵机设备参数（整合静态+运行参数）
@@ -107,6 +111,12 @@ void vServoSetTargetValue(emServoDevNumTdf emDevNum, float fValue);
 
 // 舵机平滑模式周期执行函数
 void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum);
+
+// 设置目标值（S 曲线模式，指定运动时长）
+void vServoSetTargetValueTimed(emServoDevNumTdf emDevNum, float fTarget, uint32_t ulDurationMs);
+
+// 查询 S 曲线运动是否完成
+uint8_t ucServoIsSmoothStepDone(emServoDevNumTdf emDevNum);
 
 #if (QEPACK_PLATFORM == TI)
 	// 180°角度型舵机默认参数初始化（极速版）

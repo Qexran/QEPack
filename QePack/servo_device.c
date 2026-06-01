@@ -164,45 +164,56 @@ void vServoSetTargetValue(emServoDevNumTdf emDevNum, float fValue)
 void vServoDevicePeriodExecute(emServoDevNumTdf emDevNum)
 {
     if(emDevNum >= SERVO_DEV_NUM) return;
-    
-    stServoRunningParamTdf *pstRunning = &astServoDeviceParam[emDevNum].stRunningParam;
- 
-    // 仅处理平滑模式
-    if(pstRunning->emMode != emServoMode_Smooth) return;
 
-    float fDelta = 0.0f;
-    
-    // 计算当前值与目标值的差值
-    fDelta = pstRunning->fTargetValue - pstRunning->fCurrentValue;
-    
-    // 差值小于0.1时，认为已到位（避免抖动）
-    if(fabs(fDelta) < 0.1f)
+    stServoRunningParamTdf *pstRunning = &astServoDeviceParam[emDevNum].stRunningParam;
+
+    if(pstRunning->emMode == emServoMode_Smooth)
     {
-        pstRunning->fCurrentValue = pstRunning->fTargetValue;
+        float fDelta = pstRunning->fTargetValue - pstRunning->fCurrentValue;
+
+        // 差值小于0.1时，认为已到位（避免抖动）
+        if(fabs(fDelta) < 0.1f)
+        {
+            pstRunning->fCurrentValue = pstRunning->fTargetValue;
+            vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
+            return;
+        }
+
+        // 按速度调整当前值（1ms调用一次，速度单位：值/ms）
+        if(fDelta > 0)
+        {
+            pstRunning->fCurrentValue += pstRunning->fSpeed;
+            if(pstRunning->fCurrentValue > pstRunning->fTargetValue)
+                pstRunning->fCurrentValue = pstRunning->fTargetValue;
+        }
+        else
+        {
+            pstRunning->fCurrentValue -= pstRunning->fSpeed;
+            if(pstRunning->fCurrentValue < pstRunning->fTargetValue)
+                pstRunning->fCurrentValue = pstRunning->fTargetValue;
+        }
+
         vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
-        return;
     }
-    
-    // 按速度调整当前值（1ms调用一次，速度单位：值/ms）
-    if(fDelta > 0)
+    else if(pstRunning->emMode == emServoMode_SmoothStep)
     {
-        pstRunning->fCurrentValue += pstRunning->fSpeed;
-        if(pstRunning->fCurrentValue > pstRunning->fTargetValue)
+        if(pstRunning->ulSmoothStepElapsedMs < pstRunning->ulSmoothStepDurationMs)
+        {
+            pstRunning->ulSmoothStepElapsedMs++;
+            float t = (float)pstRunning->ulSmoothStepElapsedMs / (float)pstRunning->ulSmoothStepDurationMs;
+            /* 五次赫米特平滑: s = 6t^5 - 15t^4 + 10t^3 */
+            float s = t * t * t * (t * (6.0f * t - 15.0f) + 10.0f);
+            pstRunning->fCurrentValue = pstRunning->fStartValue +
+                s * (pstRunning->fTargetValue - pstRunning->fStartValue);
+        }
+        else
         {
             pstRunning->fCurrentValue = pstRunning->fTargetValue;
+            pstRunning->emMode = emServoMode_Static;
         }
+
+        vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
     }
-    else
-    {
-        pstRunning->fCurrentValue -= pstRunning->fSpeed;
-        if(pstRunning->fCurrentValue < pstRunning->fTargetValue)
-        {
-            pstRunning->fCurrentValue = pstRunning->fTargetValue;
-        }
-    }
-    
-    // 更新PWM输出
-    vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, pstRunning->fCurrentValue));
 }
 
 /// @brief      180°角度型舵机默认参数初始化（简化版）
@@ -482,5 +493,46 @@ void vServoSetMode(emServoDevNumTdf emDevNum, emServoModeTdf newemMode)
     astServoDeviceParam[emDevNum].stRunningParam.emMode = newemMode;
 }
 
+/// @brief      设置目标值（S 曲线模式，指定运动时长）
+/// @param      emDevNum     ：设备号
+/// @param      fTarget      ：目标值
+/// @param      ulDurationMs ：运动总时长(ms)
+void vServoSetTargetValueTimed(emServoDevNumTdf emDevNum, float fTarget, uint32_t ulDurationMs)
+{
+    if(emDevNum >= SERVO_DEV_NUM) return;
+
+    stServoDeviceParamTdf *pstDev = &astServoDeviceParam[emDevNum];
+    stServoRunningParamTdf *pstRun = &pstDev->stRunningParam;
+    stServoStaticParamTdf *pstStatic = &pstDev->stStaticParam;
+
+    // 边界限制
+    if(fTarget < pstStatic->fValueMin) fTarget = pstStatic->fValueMin;
+    if(fTarget > pstStatic->fValueMax) fTarget = pstStatic->fValueMax;
+
+    if(ulDurationMs == 0)
+    {
+        // 时长为零，直接跳到目标
+        pstRun->fCurrentValue = fTarget;
+        pstRun->fTargetValue = fTarget;
+        pstRun->emMode = emServoMode_Static;
+        vServoUpdatePwm(emDevNum, fServoValueToPulse(emDevNum, fTarget));
+        return;
+    }
+
+    pstRun->fStartValue = pstRun->fCurrentValue;
+    pstRun->fTargetValue = fTarget;
+    pstRun->ulSmoothStepDurationMs = ulDurationMs;
+    pstRun->ulSmoothStepElapsedMs = 0;
+    pstRun->emMode = emServoMode_SmoothStep;
+}
+
+/// @brief      查询 S 曲线运动是否完成
+/// @param      emDevNum   ：设备号
+/// @return     1=已完成（或不在SmoothStep模式），0=运动中
+uint8_t ucServoIsSmoothStepDone(emServoDevNumTdf emDevNum)
+{
+    if(emDevNum >= SERVO_DEV_NUM) return 1;
+    return (astServoDeviceParam[emDevNum].stRunningParam.emMode != emServoMode_SmoothStep);
+}
 
 #endif /* SERVO_IS_ENABLE */

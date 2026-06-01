@@ -270,6 +270,10 @@ typedef enum
 #define HMI_CMD_BUF_MAX_LEN                            256                             // HMI 命令格式化缓冲区长度
 #define HMI0                                            emHmiDevNum0                    // HMI 设备别名
 
+/* 多轴协调运动控制器 相关 */
+#define ARM_CONTROLLER_IS_ENABLE                        0                               // 多轴协调运动控制器 模块总开关
+#define ARM_CONTROLLER_MAX_AXIS                         8                               // 最大轴数
+
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关
 #define STEP_M_MAX_STEP_NUM                             20                              // 最大步骤数量
