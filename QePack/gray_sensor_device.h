@@ -122,7 +122,7 @@ void vGraySensorSetStopState(emGraySensorDevNumTdf emDevNum, emGrayStopStateTdf 
 /* ==================== 传感器基类适配 ==================== */
 #if SENSOR_IS_ENABLE
     #include "sensor_device.h"
-    void vGraySensorWrapperRegister(emSensorDevNumTdf emSensorDevNum);
+    void vGraySensorWrapperRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
 #endif
 
 #endif

@@ -49,24 +49,7 @@ static inline I2C_Regs *pstGetI2cInst(emMpu6050DevNumTdf emDevNum)
 }
 
 /* ==================== inv_mpu 平台接口实现 ==================== */
-
-/**
- * @brief  平台延时 (ms)
- */
-void mspm0_delay_ms(unsigned long num_ms)
-{
-    DL_Common_delayCycles(num_ms * CPUCLK_FREQ / 1000);
-}
-
-/**
- * @brief  获取系统时钟 (ms)
- */
-unsigned long mspm0_get_clock_ms(unsigned long *count)
-{
-    extern uint32_t tick_ms;
-    *count = tick_ms;
-    return *count;
-}
+/* mspm0_delay_ms 和 mspm0_get_clock_ms 由 ti_platform.c 提供 */
 
 /**
  * @brief  I2C SDA 解锁（时钟脉冲恢复）
@@ -398,5 +381,141 @@ void vMpu6050GetAccelRaw(emMpu6050DevNumTdf emDevNum, stMpu6050AccelRawTdf *pstA
     if (emDevNum >= MPU6050_DEV_NUM || pstAccel == NULL) return;
     *pstAccel = g_astMpu6050DeviceParam[emDevNum].stRunningParam.stAccel;
 }
+
+/* ==================== 传感器基类适配 ==================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define MPU6050_SENSOR_LOCAL_MAX  3
+#define MPU6050_SENSOR_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensorMPU6050DevNum0))
+
+typedef struct {
+    stSensorDeviceTdf      stBase;
+    emSensorDevNumTdf      emSensorDevNum;
+    fix32_t                fCurrentValue;
+    fix32_t                fLastYaw;
+    fix32_t                fAccumulatedYaw;
+    fix32_t                fTargetValue;
+    int32_t                lTurnCount;
+} stMpu6050SensorWrapperTdf;
+
+static void vMpu6050SensorInit(void *pstSensor)
+{
+    (void)pstSensor;
+}
+
+static void vMpu6050SensorPeriodExecute(void *pstSensor)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    emMpu6050DevNumTdf emLocalDev = (emMpu6050DevNumTdf)MPU6050_SENSOR_TO_LOCAL(pstWrapper->emSensorDevNum);
+    if (emLocalDev >= MPU6050_DEV_NUM) return;
+
+    vMpu6050ComputeAttitude(emLocalDev);
+
+    if (pstWrapper->stBase.emAxis == emSensorAxisYaw) {
+        pstWrapper->fLastYaw = pstWrapper->fCurrentValue;
+        pstWrapper->fCurrentValue = fix32_from_float(g_astMpu6050DeviceParam[emLocalDev].stRunningParam.stAttitude.fYaw);
+
+        fix32_t fDelta = pstWrapper->fCurrentValue - pstWrapper->fLastYaw;
+        if (fDelta > (fix32_t)(180 * 65536)) {
+            pstWrapper->lTurnCount--;
+        } else if (fDelta < (fix32_t)(-180 * 65536)) {
+            pstWrapper->lTurnCount++;
+        }
+        pstWrapper->fAccumulatedYaw = pstWrapper->fCurrentValue
+            + (fix32_t)((int64_t)pstWrapper->lTurnCount * 360 * 65536);
+    } else {
+        float fVal;
+        switch (pstWrapper->stBase.emAxis) {
+            case emSensorAxisPitch:
+                fVal = g_astMpu6050DeviceParam[emLocalDev].stRunningParam.stAttitude.fPitch;
+                break;
+            case emSensorAxisRoll:
+                fVal = g_astMpu6050DeviceParam[emLocalDev].stRunningParam.stAttitude.fRoll;
+                break;
+            default:
+                fVal = g_astMpu6050DeviceParam[emLocalDev].stRunningParam.stAttitude.fYaw;
+                break;
+        }
+        pstWrapper->fCurrentValue = fix32_from_float(fVal);
+        pstWrapper->fAccumulatedYaw = pstWrapper->fCurrentValue;
+    }
+}
+
+static fix32_t fMpu6050SensorGetValue(void *pstSensor)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    return pstWrapper->fCurrentValue;
+}
+
+static fix32_t fMpu6050SensorGetAccumulatedValue(void *pstSensor)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    return pstWrapper->fAccumulatedYaw;
+}
+
+static void vMpu6050SensorReset(void *pstSensor)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    pstWrapper->fCurrentValue    = FIX32_ZERO;
+    pstWrapper->fLastYaw         = FIX32_ZERO;
+    pstWrapper->fAccumulatedYaw  = FIX32_ZERO;
+    pstWrapper->fTargetValue     = FIX32_ZERO;
+    pstWrapper->lTurnCount       = 0;
+}
+
+static void vMpu6050SensorSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    pstWrapper->fTargetValue = fTarget;
+}
+
+static fix32_t fMpu6050SensorGetTarget(void *pstSensor)
+{
+    stMpu6050SensorWrapperTdf *pstWrapper = (stMpu6050SensorWrapperTdf *)pstSensor;
+    return pstWrapper->fTargetValue;
+}
+
+static stSensorVTableTdf g_stMpu6050SensorVTable = {
+    vMpu6050SensorInit,
+    vMpu6050SensorPeriodExecute,
+    fMpu6050SensorGetValue,
+    fMpu6050SensorGetAccumulatedValue,
+    vMpu6050SensorReset,
+    vMpu6050SensorSetTarget,
+    fMpu6050SensorGetTarget,
+};
+
+static stMpu6050SensorWrapperTdf g_astMpu6050SensorDevices[MPU6050_SENSOR_LOCAL_MAX];
+
+void vMpu6050SensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
+{
+    uint8_t ucLocalIdx = MPU6050_SENSOR_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= MPU6050_SENSOR_LOCAL_MAX) return;
+
+    /* 在注册阶段完成硬件初始化 */
+    if (pstInit != NULL) {
+        emMpu6050DeviceInit((emMpu6050DevNumTdf)ucLocalIdx, (const stMpu6050StaticParamTdf *)pstInit);
+    }
+
+    stMpu6050SensorWrapperTdf *pstWrapper = &g_astMpu6050SensorDevices[ucLocalIdx];
+    memset(pstWrapper, 0, sizeof(stMpu6050SensorWrapperTdf));
+
+    pstWrapper->stBase.emType          = emSensorTypeMPU6050Gyro;
+    pstWrapper->stBase.pstVTable       = &g_stMpu6050SensorVTable;
+    pstWrapper->stBase.ucEnable        = 1;
+    pstWrapper->stBase.fWeight         = FIX32_ONE;
+    pstWrapper->stBase.emAxis          = emSensorAxisYaw;
+    pstWrapper->stBase.emPidDevNum     = emNoPid;
+    pstWrapper->stBase.usPidPeriodMs   = 0;
+    pstWrapper->stBase.ulPidLastTickMs = 0;
+    pstWrapper->emSensorDevNum         = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstWrapper->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
 
 #endif

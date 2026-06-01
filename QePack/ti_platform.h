@@ -137,11 +137,9 @@ QE_StatusTypeDef TI_UART_Transmit(
     uint16_t Size, uint32_t Timeout
 );
 
-int mspm0_delay_ms(unsigned long num_ms);
+void mspm0_delay_ms(unsigned long num_ms);
 
-int mspm0_get_clock_ms(unsigned long *count);
-
-void SysTick_Init(void);
+void mspm0_get_clock_ms(unsigned long *count);
 
 uint8_t ucGetSysTickInitialState();
 
@@ -151,6 +149,14 @@ GPIO_PinState TI_GPIO_ReadPin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin);
 void TI_GPIO_WritePin(GPIO_Regs *GPIOx, uint32_t GPIO_Pin, GPIO_PinState PinState);
 
 void TI_ADC_Start(stAdcTdf *pstAdcBase);
+
+/* ==================== Timer IC 抽象（超声波等模块使用） ==================== */
+void     TI_TIM_IC_Start(stTimerTdf *pstTim, uint32_t ulChannel);
+void     TI_TIM_IC_Stop(stTimerTdf *pstTim, uint32_t ulChannel);
+uint32_t TI_TIM_ReadCapturedValue(stTimerTdf *pstTim, uint32_t ulChannel);
+uint32_t TI_TIM_GetFlag(stTimerTdf *pstTim, uint32_t ulChannel);
+void     TI_TIM_ClearFlag(stTimerTdf *pstTim, uint32_t ulChannel);
+void     TI_Delay_us(uint32_t us);
 
 void vTiClearFlashDebris();
 

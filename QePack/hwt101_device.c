@@ -700,10 +700,11 @@ fix32_t fHwt101GetAccumulatedValue(void *pstSensor)
 
 /* ===================== 注册函数 ===================== */
 
-void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *pstInit)
+void vHwt101Register(emSensorDevNumTdf emSensorDevNum, void *pstInit)
 {
+    stHwt101StaticParamTdf *pstInitParam = (stHwt101StaticParamTdf *)pstInit;
     uint8_t ucLocalIdx = u8Hwt101GetLocalIdx(emSensorDevNum);
-    if (ucLocalIdx >= HWT101_DEV_NUM || pstInit == NULL) { return; }
+    if (ucLocalIdx >= HWT101_DEV_NUM || pstInitParam == NULL) { return; }
 
     stHwt101DeviceParamTdf *pstHwt = &gastHwt101DeviceParam[ucLocalIdx];
     memset(pstHwt, 0, sizeof(stHwt101DeviceParamTdf));
@@ -712,13 +713,13 @@ void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *p
     pstHwt->stBase.emType          = emSensorTypeHWT101Gyro;
     pstHwt->stBase.pstVTable       = &g_stHwt101VTable;
     pstHwt->stBase.ucEnable        = 1;
-    pstHwt->stBase.fWeight         = pstInit->fWeight;
-    pstHwt->stBase.emPidDevNum     = pstInit->emPidDevNum;
-    pstHwt->stBase.usPidPeriodMs   = pstInit->usPidPeriodMs;
+    pstHwt->stBase.fWeight         = pstInitParam->fWeight;
+    pstHwt->stBase.emPidDevNum     = pstInitParam->emPidDevNum;
+    pstHwt->stBase.usPidPeriodMs   = pstInitParam->usPidPeriodMs;
     pstHwt->stBase.ulPidLastTickMs = 0;
 
     /* 拷贝静态参数 */
-    memcpy(&pstHwt->stStaticParam, pstInit, sizeof(stHwt101StaticParamTdf));
+    memcpy(&pstHwt->stStaticParam, pstInitParam, sizeof(stHwt101StaticParamTdf));
 
     /* 输出速率默认值：用户传 0 则默认 100Hz */
     if (pstHwt->stStaticParam.emOutputRate == 0)

@@ -104,6 +104,12 @@ void vMpu6050GetGyroRaw(emMpu6050DevNumTdf emDevNum, stMpu6050GyroRawTdf *pstGyr
 /* 获取加速度原始值 */
 void vMpu6050GetAccelRaw(emMpu6050DevNumTdf emDevNum, stMpu6050AccelRawTdf *pstAccel);
 
+/* ==================== 传感器基类适配 ==================== */
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+    void vMpu6050SensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
+#endif
+
 /* ======================== 使用方法 ========================
  * 1. 在 project_config.h 中设置 MPU6050_IS_ENABLE 为 1
  *    设置 MPU6050_DEV_NUM 为 1

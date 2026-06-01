@@ -22,12 +22,16 @@ void TI_Delay(unsigned long num_ms)
     while (tick_ms - start_time < num_ms);
 }
 
-int mspm0_get_clock_ms(unsigned long *count)
+void mspm0_delay_ms(unsigned long num_ms)
 {
-    if (!count)
-        return 1;
-    count[0] = tick_ms;
-    return 0;
+    volatile unsigned long start_time = tick_ms;
+    while (tick_ms - start_time < num_ms);
+}
+
+void mspm0_get_clock_ms(unsigned long *count)
+{
+    if (count)
+        *count = tick_ms;
 }
 
 uint8_t ucGetSysTickInitialState(){
@@ -451,6 +455,71 @@ void vTiClearFlashDebris()
 
     // 9. 恢复全局中断
     __set_PRIMASK(primask);
+}
+
+/* ==================== Timer IC 抽象（超声波等模块使用） ==================== */
+
+void TI_TIM_IC_Start(stTimerTdf *pstTim, uint32_t ulChannel)
+{
+    (void)pstTim;
+    (void)ulChannel;
+    /* MSPM0: 捕获通道在 SysConfig 初始化时已配置并使能，
+       此处为空操作。若需动态启动，可在此添加寄存器配置。 */
+}
+
+void TI_TIM_IC_Stop(stTimerTdf *pstTim, uint32_t ulChannel)
+{
+    (void)pstTim;
+    (void)ulChannel;
+    /* MSPM0: 捕获通道无法单独停止，此处为空操作。
+       超声波模块通过重置定时器计数值实现"重新测量"。 */
+}
+
+/* 将 STM32 风格的 TIM_CHANNEL_x(0-based) 转为 MSPM0 的 0-based 索引 */
+#define TI_TIM_CH_TO_IDX(ch)  ((ch) & 0x03U)
+
+uint32_t TI_TIM_ReadCapturedValue(stTimerTdf *pstTim, uint32_t ulChannel)
+{
+    uint32_t ulIdx = TI_TIM_CH_TO_IDX(ulChannel);
+    /* MSPM0 COUNTERREGS 按通道对分组：CC_01[0]=CC0, CC_01[1]=CC1, CC_23[0]=CC2, CC_23[1]=CC3 */
+    if (ulIdx < 2) {
+        return pstTim->timer_inst->COUNTERREGS.CC_01[ulIdx];
+    } else {
+        return pstTim->timer_inst->COUNTERREGS.CC_23[ulIdx - 2];
+    }
+}
+
+uint32_t TI_TIM_GetFlag(stTimerTdf *pstTim, uint32_t ulChannel)
+{
+    /* 读取原始中断状态（RIS），CCU0 在 bit 8，CCU1 在 bit 9 */
+    return pstTim->timer_inst->CPU_INT.RIS & (1U << (8U + TI_TIM_CH_TO_IDX(ulChannel)));
+}
+
+void TI_TIM_ClearFlag(stTimerTdf *pstTim, uint32_t ulChannel)
+{
+    /* 写 ICLR 寄存器清除中断标志 */
+    pstTim->timer_inst->CPU_INT.ICLR = (1U << (8U + TI_TIM_CH_TO_IDX(ulChannel)));
+}
+
+void TI_Delay_us(uint32_t us)
+{
+    /* 使用 SysTick VAL 寄存器做忙等延时
+       SysTick 从 LOAD 递减到 0 后重装，VAL 表示当前剩余计数 */
+    uint32_t ticks = (CPUCLK_FREQ / 1000000U) * us;
+    uint32_t prev  = SysTick->VAL;
+    uint32_t elapsed = 0;
+
+    while (elapsed < ticks) {
+        uint32_t curr = SysTick->VAL;
+        /* SysTick 是递减计数器 */
+        if (prev >= curr) {
+            elapsed += (prev - curr);
+        } else {
+            /* 计数器重装（LOAD → 0 → LOAD） */
+            elapsed += prev + (SysTick->LOAD - curr);
+        }
+        prev = curr;
+    }
 }
 
 #if UART_IS_USE_DMA

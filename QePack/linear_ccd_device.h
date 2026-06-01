@@ -119,7 +119,7 @@ void vLinerCcdSendToPc(emLinerCcdDevNumTdf emDevNum);
 /* ==================== 传感器基类适配 ==================== */
 #if SENSOR_IS_ENABLE
     #include "sensor_device.h"
-    void vCCDSensorRegister(emSensorDevNumTdf emSensorDevNum);
+    void vCCDSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
 #endif
 
 

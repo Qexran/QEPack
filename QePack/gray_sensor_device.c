@@ -353,8 +353,9 @@ static stSensorVTableTdf g_stGraySensorWrapperVTable = {
 
 static stGraySensorWrapperDeviceTdf g_astGraySensorWrapperDevices[GRAY_SENSOR_WRAPPER_LOCAL_MAX];
 
-void vGraySensorWrapperRegister(emSensorDevNumTdf emSensorDevNum)
+void vGraySensorWrapperRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
 {
+    (void)pstInit;
     uint8_t ucLocalIdx = GRAY_SENSOR_WRAPPER_TO_LOCAL(emSensorDevNum);
     if (ucLocalIdx >= GRAY_SENSOR_WRAPPER_LOCAL_MAX) {
         return;

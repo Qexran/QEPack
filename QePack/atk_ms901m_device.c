@@ -1071,8 +1071,9 @@ static stSensorVTableTdf g_stGyroSensorVTable = {
 
 static stGyroSensorDeviceTdf g_astGyroSensorDevices[GYRO_SENSOR_LOCAL_MAX];
 
-void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum)
+void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
 {
+    (void)pstInit;
     uint8_t ucLocalIdx = GYRO_SENSOR_TO_LOCAL(emSensorDevNum);
     if (ucLocalIdx >= GYRO_SENSOR_LOCAL_MAX) {
         return;

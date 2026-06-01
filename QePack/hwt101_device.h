@@ -164,7 +164,7 @@ extern stHwt101DeviceParamTdf gastHwt101DeviceParam[HWT101_DEV_NUM];
 /// @brief  注册 HWT101 设备到 sensor 基类
 /// @param  emSensorDevNum ：sensor 统一设备号（emSensorHWT101DevNum0/1/2）
 /// @param  pstInit        ：初始化参数指针
-void vHwt101Register(emSensorDevNumTdf emSensorDevNum, stHwt101StaticParamTdf *pstInit);
+void vHwt101Register(emSensorDevNumTdf emSensorDevNum, void *pstInit);
 
 
 /* ==================== 虚方法实现（供 VTable 调用） ==================== */
@@ -289,18 +289,17 @@ void vHwt101ManualCali(emSensorDevNumTdf emSensorDevNum, uint8_t ucStart);
  *
  * ==================== 1. 注册方式 ====================
  *
- *   // 注册到 sensor 统一设备号
+ *   // 初始化（注册 + 硬件初始化一步完成）
  *   stHwt101StaticParamTdf stHwt = {
  *       .emComMode = emHwt101ComModeI2C,
  *       .pstI2cHandle = &stI2c,
  *       .u8I2cAddr = 0x50,
  *   };
- *   vHwt101Register(emSensorHWT101DevNum0, &stHwt);
+ *   vSensorInit(emSensorHWT101DevNum0, &stHwt);
  *
  * ==================== 2. 多态调用 ====================
  *
  *   // 通过 sensor 统一接口访问（多态）
- *   vSensorInit(emSensorHWT101DevNum0);
  *   vSensorPeriodExecute(emSensorHWT101DevNum0);
  *   fix32_t fAngle = fSensorGetValue(emSensorHWT101DevNum0);
  *

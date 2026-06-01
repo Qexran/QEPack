@@ -272,7 +272,7 @@ uint8_t atk_ms901m_read_port(emAtkMs901mDevNumTdf emDevNum, atk_ms901m_port_data
 /* ==================== 传感器基类适配 ==================== */
 #if SENSOR_IS_ENABLE
     #include "sensor_device.h"
-    void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum);
+    void vGyroSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
 #endif
 
 #endif

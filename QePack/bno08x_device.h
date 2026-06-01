@@ -82,6 +82,12 @@ float fBno08xGetYaw(emBno08xDevNumTdf emDevNum);
 /* 获取加速度原始值 */
 void vBno08xGetAccel(emBno08xDevNumTdf emDevNum, stBno08xAccelTdf *pstAccel);
 
+/* ==================== 传感器基类适配 ==================== */
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+    void vBno08xSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
+#endif
+
 /* ======================== 使用方法 ========================
  * 1. 在 project_config.h 中设置 BNO08X_IS_ENABLE 为 1
  *    设置 BNO08X_DEV_NUM 为所需设备数量

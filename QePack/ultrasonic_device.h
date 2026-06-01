@@ -17,6 +17,13 @@
 #include "math.h"
 #include "arithmetic.h"
 
+#if (QEPACK_PLATFORM == ST)
+    #include "gpio.h"
+    #include "tim.h"
+#else
+    #include "ti_platform.h"
+#endif
+
 /**
  * @brief          超声波设备号枚举
  * @note 
@@ -46,16 +53,22 @@ emUltrasonicStatusTdf;
 
 /**
  * @brief          超声波静态参数定义（硬件相关）
- * @note           
+ * @note
  */
 typedef struct
 {
+#if (QEPACK_PLATFORM == ST)
     GPIO_TypeDef        *pstTrigGpioBase;  // 触发引脚GPIO端口
     uint16_t            usTrigGpioPin;     // 触发引脚GPIO_PIN_x
     TIM_HandleTypeDef   *pstTimHandle;     // 输入捕获定时器句柄
+#else
+    GPIO_Regs           *pstTrigGpioBase;  // 触发引脚GPIO端口
+    uint32_t            usTrigGpioPin;     // 触发引脚GPIO_PIN_x
+    stTimerTdf          *pstTimHandle;     // 输入捕获定时器句柄
+#endif
     uint32_t            ulICChannel1;      // 输入捕获通道1（上升沿）
     uint32_t            ulICChannel2;      // 输入捕获通道2（下降沿）
-	float 				fTimerPeriod;      // 定时器计数周期（秒， 1e-6 代表1us）
+    float               fTimerPeriod;      // 定时器计数周期（秒， 1e-6 代表1us）
 }
 stUltrasonicStaticParamTdf;
 
@@ -101,6 +114,12 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum);
 /* 初始化函数 */
 void vUltrasonicDeviceRunningParamInit(stUltrasonicRunningParamTdf *pstInit, emUltrasonicDevNumTdf emDevNum);
 void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevNumTdf emDevNum);
+
+/* ==================== 传感器基类适配 ==================== */
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+    void vUltrasonicSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
+#endif
 
 #endif
 #endif
@@ -157,26 +176,27 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
   SysConfig 配置步骤 (TI MSPM0)
   ============================================================================
 
-  当前超声波驱动仅支持 STM32 平台（使用了 ST HAL 的 TIM IC / GPIO 宏）。
-  TI 平台需要参照以下思路移植：
+  超声波驱动已支持 TI MSPM0 平台，通过 ti_platform.h 中的抽象函数实现跨平台。
 
-  1. 定时器
-     - 使用一个通用定时器的两个 Capture 通道
-     - Capture CH1: 上升沿，Capture CH2: 下降沿（映射到同一输入引脚）
-     - 计数器频率设置为 1MHz（方便计算 us）
-     - 使能捕获中断（或使用轮询方式读取 Capture 寄存器）
+  1. 定时器（SysConfig 配置）
+     - 添加 GPTIMER 模块，命名为 "TIMER_ULTRASONIC"
+     - Timer Mode: Capture
+     - Capture CH0: 上升沿（ECHO 引脚）
+     - Capture CH1: 下降沿（同一 ECHO 引脚）
+     - 计数器频率: 1MHz（预分频使计数周期 = 1us）
+     - 使能 Timer interrupt（最低优先级）
 
-  2. TRIG 引脚
-     - 配置一个 GPIO 为输出模式
+  2. TRIG 引脚（SysConfig 配置）
+     - 添加 GPIO 模块，命名为 "GPIO_ULTRASONIC"
+     - 引脚 PIN_ULTRASONIC_TRIG: 方向 Output，初始 Low
 
-  3. 移植要点
-     - 将 HAL_TIM_IC_Start/Stop 替换为 DL_Timer_startCapture/DL_Timer_stopCapture
-     - 将 __HAL_TIM_GET_FLAG 替换为 DL_Timer_getPendingInterrupt
-     - 将 HAL_GPIO_WritePin 替换为 DL_GPIO_writePins
-     - Delay_us 在 TI 平台上需使用定时器延时，DWT 不可用（Cortex-M0+ 无 DWT）
+  3. 初始化参数
+     - ulICChannel1 = TIM_CHANNEL_0  (CC0 上升沿)
+     - ulICChannel2 = TIM_CHANNEL_1  (CC1 下降沿)
+       注意: TI 平台使用 0-based 通道号，STM32 使用 1-based
 
   ============================================================================
-  使用示例
+  使用示例 (STM32)
   ============================================================================
 
   void vUltrasonicInit(void)
@@ -233,4 +253,27 @@ void vUltrasonicDeviceInit(stUltrasonicStaticParamTdf *pstInit, emUltrasonicDevN
     - 默认超时 200ms，请确保主循环周期 < 200ms，否则需调大 ulTimeoutMs
     - SYSTEM_CORE_CLOCK 必须与实际 CPU 频率一致，否则 Delay_us(10) 产生的 TRIG 脉宽不足
     - fTimerPeriod 要与定时器的 Prescaler 设置匹配
+
+  ============================================================================
+  使用示例 (TI MSPM0，通过 Sensor 基类多态接口)
+  ============================================================================
+
+  #include "QEPack.h"
+
+  void vUltrasonicInit(void)
+  {
+      stUltrasonicStaticParamTdf stInit = {
+          .pstTrigGpioBase = GPIO_ULTRASONIC_INST,         // SysConfig 生成
+          .usTrigGpioPin   = DL_GPIO_PIN_0,                // TRIG 引脚
+          .pstTimHandle    = &g_stTimerUltrasonic,         // stTimerTdf 结构体
+          .ulICChannel1    = TIM_CHANNEL_0,                // CC0（上升沿）
+          .ulICChannel2    = TIM_CHANNEL_1,                // CC1（下降沿）
+          .fTimerPeriod    = 1e-6                          // 计数器周期 (1us)
+      };
+      vSensorInit(emSensorUltrasonicDevNum0, &stInit);
+  }
+
+  // 主循环中使用 sensor 基类接口
+  vSensorPeriodExecute(emSensorUltrasonicDevNum0);
+  fix32_t fDist = fSensorGetValue(emSensorUltrasonicDevNum0);  // 单位: 米 (Q16.16)
 */

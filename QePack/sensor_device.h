@@ -28,7 +28,15 @@ typedef enum {
     emSensorTypeHWT101Gyro,         /* HWT101 陀螺仪 */
     emSensorTypeGray,               /* 灰度传感器 */
     emSensorTypeCCD,                /* 线性CCD */
+    emSensorTypeUltrasonic,         /* 超声波测距 */
 } emSensorTypeTdf;
+
+/** @brief 传感器轴选择枚举（陀螺仪类传感器配置 fGetValue 返回哪个轴） */
+typedef enum {
+    emSensorAxisYaw   = 0,          /* 航向角（默认） */
+    emSensorAxisPitch = 1,          /* 俯仰角 */
+    emSensorAxisRoll  = 2,          /* 横滚角 */
+} emSensorAxisTdf;
 
 /** @brief 传感器设备号枚举 */
 typedef enum {
@@ -64,7 +72,13 @@ typedef enum {
     emSensorHWT101DevNum1      = 20,
     emSensorHWT101DevNum2      = 21,
 
-    emSensorMaxDevNum      = 22,
+    // 超声波传感器设备号
+    emSensorUltrasonicDevNum0  = 22,
+    emSensorUltrasonicDevNum1  = 23,
+    emSensorUltrasonicDevNum2  = 24,
+    emSensorUltrasonicDevNum3  = 25,
+
+    emSensorMaxDevNum      = 26,
 
     emNoSensor = 0xFF,
 } emSensorDevNumTdf;
@@ -73,8 +87,8 @@ typedef enum {
 typedef struct stSensorVTableTdf {
     void    (*vInit)(void *pstSensor);                          /* 初始化 */
     void    (*vPeriodExecute)(void *pstSensor);                 /* 周期执行 */
-    fix32_t (*fGetValue)(void *pstSensor);                      /* 获取当前值（原始角度） */
-    fix32_t (*fGetAccumulatedValue)(void *pstSensor);           /* 获取累加值（跨圈连续） */
+    fix32_t (*fGetValue)(void *pstSensor);                      /* 获取当前值（原始值） */
+    fix32_t (*fGetAccumulatedValue)(void *pstSensor);           /* 获取累加值（连续值） */
     void    (*vReset)(void *pstSensor);                         /* 重置传感器状态 */
     void    (*vSetTarget)(void *pstSensor, fix32_t fTarget);    /* 设置目标值 */
     fix32_t (*fGetTarget)(void *pstSensor);                     /* 获取目标值 */
@@ -87,10 +101,11 @@ typedef struct stSensorDeviceTdf {
     uint8_t            ucEnable;        /* 使能标志 */
 
     fix32_t            fWeight;         /* 互补滤波权重（0~1） */
+    emSensorAxisTdf    emAxis;          /* 陀螺仪类传感器轴选择（默认 Yaw） */
 
     emPidDevNumTdf     emPidDevNum;     /* PID 设备号（emNoPid=0xFF 表示不使用） */
     uint16_t           usPidPeriodMs;   /* PID 计算周期 (ms) */
-    
+
     uint32_t           ulPidLastTickMs; /* 上次 PID 计算的时间戳 */
     fix32_t            fPidOutput;      /* PID 输出值（基类维护） */
 } stSensorDeviceTdf;
@@ -101,7 +116,7 @@ extern stSensorDeviceTdf *g_astSensorDevices[];
 /* 传感器基类方法 */
 stSensorDeviceTdf *pstSensorGetDevice(emSensorDevNumTdf emDevNum);
 void vSensorRegisterDevice(emSensorDevNumTdf emDevNum, stSensorDeviceTdf *pstSensor);
-void vSensorInit(emSensorDevNumTdf emDevNum);
+void vSensorInit(emSensorDevNumTdf emDevNum, void *pstInitParams);
 void vSensorPeriodExecute(emSensorDevNumTdf emDevNum);
 fix32_t fSensorGetValue(emSensorDevNumTdf emDevNum);
 void vSensorReset(emSensorDevNumTdf emDevNum);
@@ -111,6 +126,8 @@ void vSensorSetEnable(emSensorDevNumTdf emDevNum, uint8_t bEnable);
 fix32_t fSensorGetAccumulatedValue(emSensorDevNumTdf emDevNum);
 fix32_t fSensorGetPidOutput(emSensorDevNumTdf emDevNum);
 void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight);
+void vSensorSetAxis(emSensorDevNumTdf emDevNum, emSensorAxisTdf emAxis);
+emSensorAxisTdf emSensorGetAxis(emSensorDevNumTdf emDevNum);
 void vSensorSetPidConfig(emSensorDevNumTdf emDevNum, emPidDevNumTdf emPidDevNum, uint16_t usPeriodMs);
 
 /* 传感器融合 互补滤波 */
@@ -122,14 +139,16 @@ fix32_t fSensorFuseValue(emSensorDevNumTdf emDevNumA, emSensorDevNumTdf emDevNum
 
 /*
     注意：基类字段必须显式填写
-    
+
     使用方式
 
-    // 注册 HWT101 到 sensor 基类
-    vHwt101SensorRegister(emSensorHWT101DevNum0);
-
-    // 通过统一接口访问
-    vSensorInit(emSensorHWT101DevNum0);
+    // 初始化（注册 + 硬件初始化一步完成）
+    stHwt101StaticParamTdf stHwt = {
+        .emComMode = emHwt101ComModeI2C,
+        .pstI2cHandle = &stI2c,
+        .u8I2cAddr = 0x50,
+    };
+    vSensorInit(emSensorHWT101DevNum0, &stHwt);
     vSensorPeriodExecute(emSensorHWT101DevNum0);
     fix32_t fAngle = fSensorGetValue(emSensorHWT101DevNum0);
 

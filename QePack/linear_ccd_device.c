@@ -446,8 +446,9 @@ static stSensorVTableTdf g_stCCDSensorVTable = {
 
 static stCCDSensorDeviceTdf g_astCCDSensorDevices[CCD_SENSOR_LOCAL_MAX];
 
-void vCCDSensorRegister(emSensorDevNumTdf emSensorDevNum)
+void vCCDSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
 {
+    (void)pstInit;
     uint8_t ucLocalIdx = CCD_SENSOR_TO_LOCAL(emSensorDevNum);
     if (ucLocalIdx >= CCD_SENSOR_LOCAL_MAX) {
         return;

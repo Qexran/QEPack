@@ -98,6 +98,12 @@ void vImu660rbGetAccel(emImu660rbDevNumTdf emDevNum, stImu660rbAccelTdf *pstAcce
 /* 获取陀螺仪 (mdps) */
 void vImu660rbGetGyro(emImu660rbDevNumTdf emDevNum, stImu660rbGyroTdf *pstGyro);
 
+/* ==================== 传感器基类适配 ==================== */
+#if SENSOR_IS_ENABLE
+    #include "sensor_device.h"
+    void vImu660rbSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit);
+#endif
+
 /* ======================== 使用方法 ========================
  * 1. 将以下库文件加入 CCS 工程：
  *    - Drivers/IMU660RB/lsm6dsr_reg.c, lsm6dsr_reg.h

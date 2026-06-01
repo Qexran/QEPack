@@ -297,4 +297,138 @@ void vImu660rbGetGyro(emImu660rbDevNumTdf emDevNum, stImu660rbGyroTdf *pstGyro)
     *pstGyro = g_astImu660rbDeviceParam[emDevNum].stRunningParam.stGyro;
 }
 
+/* ==================== 传感器基类适配 ==================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define IMU660RB_SENSOR_LOCAL_MAX  3
+#define IMU660RB_SENSOR_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensor660RBDevNum0))
+
+typedef struct {
+    stSensorDeviceTdf      stBase;
+    emSensorDevNumTdf      emSensorDevNum;
+    fix32_t                fCurrentValue;
+    fix32_t                fLastYaw;
+    fix32_t                fAccumulatedYaw;
+    fix32_t                fTargetValue;
+    int32_t                lTurnCount;
+} stImu660rbSensorWrapperTdf;
+
+static void vImu660rbSensorInit(void *pstSensor)
+{
+    (void)pstSensor;
+}
+
+static void vImu660rbSensorPeriodExecute(void *pstSensor)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    emImu660rbDevNumTdf emLocalDev = (emImu660rbDevNumTdf)IMU660RB_SENSOR_TO_LOCAL(pstWrapper->emSensorDevNum);
+    if (emLocalDev >= IMU660RB_DEV_NUM) return;
+
+    if (pstWrapper->stBase.emAxis == emSensorAxisYaw) {
+        pstWrapper->fLastYaw = pstWrapper->fCurrentValue;
+        pstWrapper->fCurrentValue = fix32_from_float(g_astImu660rbDeviceParam[emLocalDev].stRunningParam.stAttitude.fYaw);
+
+        fix32_t fDelta = pstWrapper->fCurrentValue - pstWrapper->fLastYaw;
+        if (fDelta > (fix32_t)(180 * 65536)) {
+            pstWrapper->lTurnCount--;
+        } else if (fDelta < (fix32_t)(-180 * 65536)) {
+            pstWrapper->lTurnCount++;
+        }
+        pstWrapper->fAccumulatedYaw = pstWrapper->fCurrentValue
+            + (fix32_t)((int64_t)pstWrapper->lTurnCount * 360 * 65536);
+    } else {
+        float fVal;
+        switch (pstWrapper->stBase.emAxis) {
+            case emSensorAxisPitch:
+                fVal = g_astImu660rbDeviceParam[emLocalDev].stRunningParam.stAttitude.fPitch;
+                break;
+            case emSensorAxisRoll:
+                fVal = g_astImu660rbDeviceParam[emLocalDev].stRunningParam.stAttitude.fRoll;
+                break;
+            default:
+                fVal = g_astImu660rbDeviceParam[emLocalDev].stRunningParam.stAttitude.fYaw;
+                break;
+        }
+        pstWrapper->fCurrentValue = fix32_from_float(fVal);
+        pstWrapper->fAccumulatedYaw = pstWrapper->fCurrentValue;
+    }
+}
+
+static fix32_t fImu660rbSensorGetValue(void *pstSensor)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    return pstWrapper->fCurrentValue;
+}
+
+static fix32_t fImu660rbSensorGetAccumulatedValue(void *pstSensor)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    return pstWrapper->fAccumulatedYaw;
+}
+
+static void vImu660rbSensorReset(void *pstSensor)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    pstWrapper->fCurrentValue    = FIX32_ZERO;
+    pstWrapper->fLastYaw         = FIX32_ZERO;
+    pstWrapper->fAccumulatedYaw  = FIX32_ZERO;
+    pstWrapper->fTargetValue     = FIX32_ZERO;
+    pstWrapper->lTurnCount       = 0;
+}
+
+static void vImu660rbSensorSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    pstWrapper->fTargetValue = fTarget;
+}
+
+static fix32_t fImu660rbSensorGetTarget(void *pstSensor)
+{
+    stImu660rbSensorWrapperTdf *pstWrapper = (stImu660rbSensorWrapperTdf *)pstSensor;
+    return pstWrapper->fTargetValue;
+}
+
+static stSensorVTableTdf g_stImu660rbSensorVTable = {
+    vImu660rbSensorInit,
+    vImu660rbSensorPeriodExecute,
+    fImu660rbSensorGetValue,
+    fImu660rbSensorGetAccumulatedValue,
+    vImu660rbSensorReset,
+    vImu660rbSensorSetTarget,
+    fImu660rbSensorGetTarget,
+};
+
+static stImu660rbSensorWrapperTdf g_astImu660rbSensorDevices[IMU660RB_SENSOR_LOCAL_MAX];
+
+void vImu660rbSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
+{
+    uint8_t ucLocalIdx = IMU660RB_SENSOR_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= IMU660RB_SENSOR_LOCAL_MAX) return;
+
+    /* 在注册阶段完成硬件初始化 */
+    if (pstInit != NULL) {
+        emImu660rbDeviceInit((emImu660rbDevNumTdf)ucLocalIdx, (const stImu660rbStaticParamTdf *)pstInit);
+    }
+
+    stImu660rbSensorWrapperTdf *pstWrapper = &g_astImu660rbSensorDevices[ucLocalIdx];
+    memset(pstWrapper, 0, sizeof(stImu660rbSensorWrapperTdf));
+
+    pstWrapper->stBase.emType          = emSensorType660RBGyro;
+    pstWrapper->stBase.pstVTable       = &g_stImu660rbSensorVTable;
+    pstWrapper->stBase.ucEnable        = 1;
+    pstWrapper->stBase.fWeight         = FIX32_ONE;
+    pstWrapper->stBase.emAxis          = emSensorAxisYaw;
+    pstWrapper->stBase.emPidDevNum     = emNoPid;
+    pstWrapper->stBase.usPidPeriodMs   = 0;
+    pstWrapper->stBase.ulPidLastTickMs = 0;
+    pstWrapper->emSensorDevNum         = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstWrapper->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
+
 #endif

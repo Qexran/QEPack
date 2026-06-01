@@ -15,6 +15,32 @@
 
 stSensorDeviceTdf *g_astSensorDevices[emSensorMaxDevNum];
 
+/* 子模块注册函数声明（由 vSensorInit 根据设备号区间自动调用） */
+#if GRAY_SENSOR_IS_ENABLE
+    extern void vGraySensorWrapperRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if LINEAR_CCD_IS_ENABLE
+    extern void vCCDSensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if ATK_MS901M_IS_ENABLE
+    extern void vGyroSensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if HWT101_IS_ENABLE
+    extern void vHwt101Register(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if MPU6050_IS_ENABLE
+    extern void vMpu6050SensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if IMU660RB_IS_ENABLE
+    extern void vImu660rbSensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if BNO08X_IS_ENABLE
+    extern void vBno08xSensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+#if ULTRASONIC_IS_ENABLE
+    extern void vUltrasonicSensorRegister(emSensorDevNumTdf emDevNum, void *pstInit);
+#endif
+
 /**
  * @brief 获取传感器设备指针
  * @param emDevNum 设备号
@@ -39,12 +65,60 @@ void vSensorRegisterDevice(emSensorDevNumTdf emDevNum, stSensorDeviceTdf *pstSen
 }
 
 /**
- * @brief 传感器初始化
+ * @brief 传感器初始化（注册 + 硬件初始化一步完成）
+ * @param emDevNum     传感器设备号
+ * @param pstInitParams 子模块静态参数指针（可为 NULL，此时仅做硬件初始化）
  */
-void vSensorInit(emSensorDevNumTdf emDevNum)
+void vSensorInit(emSensorDevNumTdf emDevNum, void *pstInitParams)
 {
+    /* 未注册时，根据设备号区间自动调用子模块注册函数 */
+    if (pstSensorGetDevice(emDevNum) == NULL && pstInitParams != NULL) {
+        #if GRAY_SENSOR_IS_ENABLE
+        if (emDevNum >= emSensorGrayDevNum0 && emDevNum <= emSensorGrayDevNum2) {
+            vGraySensorWrapperRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if LINEAR_CCD_IS_ENABLE
+        if (emDevNum >= emSensorCCDDevNum0 && emDevNum <= emSensorCCDDevNum3) {
+            vCCDSensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if ATK_MS901M_IS_ENABLE
+        if (emDevNum >= emSensorAtkMs901MDevNum0 && emDevNum <= emSensorAtkMs901MDevNum2) {
+            vGyroSensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if HWT101_IS_ENABLE
+        if (emDevNum >= emSensorHWT101DevNum0 && emDevNum <= emSensorHWT101DevNum2) {
+            vHwt101Register(emDevNum, pstInitParams);
+        }
+        #endif
+        #if MPU6050_IS_ENABLE
+        if (emDevNum >= emSensorMPU6050DevNum0 && emDevNum <= emSensorMPU6050DevNum2) {
+            vMpu6050SensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if IMU660RB_IS_ENABLE
+        if (emDevNum >= emSensor660RBDevNum0 && emDevNum <= emSensor660RBDevNum2) {
+            vImu660rbSensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if BNO08X_IS_ENABLE
+        if (emDevNum >= emSensorNBO08XDevNum0 && emDevNum <= emSensorNBO08XDevNum2) {
+            vBno08xSensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+        #if ULTRASONIC_IS_ENABLE
+        if (emDevNum >= emSensorUltrasonicDevNum0 && emDevNum <= emSensorUltrasonicDevNum3) {
+            vUltrasonicSensorRegister(emDevNum, pstInitParams);
+        }
+        #endif
+    }
+
+    /* 走 VTable 初始化硬件 */
     stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
-    if (pstSensor != NULL && pstSensor->pstVTable != NULL && pstSensor->pstVTable->vInit != NULL) {
+    if (pstSensor != NULL && pstSensor->pstVTable != NULL
+        && pstSensor->pstVTable->vInit != NULL) {
         pstSensor->pstVTable->vInit(pstSensor);
     }
 }
@@ -96,30 +170,6 @@ fix32_t fSensorGetValue(emSensorDevNumTdf emDevNum)
 }
 
 /**
- * @brief 获取传感器累加值（跨圈连续）
- */
-fix32_t fSensorGetAccumulatedValue(emSensorDevNumTdf emDevNum)
-{
-    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
-    if (pstSensor != NULL && pstSensor->pstVTable != NULL && pstSensor->pstVTable->fGetAccumulatedValue != NULL) {
-        return pstSensor->pstVTable->fGetAccumulatedValue(pstSensor);
-    }
-    return FIX32_ZERO;
-}
-
-/**
- * @brief 获取传感器 PID 输出值
- */
-fix32_t fSensorGetPidOutput(emSensorDevNumTdf emDevNum)
-{
-    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
-    if (pstSensor != NULL) {
-        return pstSensor->fPidOutput;
-    }
-    return FIX32_ZERO;
-}
-
-/**
  * @brief 重置传感器
  */
 void vSensorReset(emSensorDevNumTdf emDevNum)
@@ -165,6 +215,30 @@ void vSensorSetEnable(emSensorDevNumTdf emDevNum, uint8_t bEnable)
 }
 
 /**
+ * @brief 获取传感器累加值（跨圈连续）
+ */
+fix32_t fSensorGetAccumulatedValue(emSensorDevNumTdf emDevNum)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL && pstSensor->pstVTable != NULL && pstSensor->pstVTable->fGetAccumulatedValue != NULL) {
+        return pstSensor->pstVTable->fGetAccumulatedValue(pstSensor);
+    }
+    return FIX32_ZERO;
+}
+
+/**
+ * @brief 获取传感器 PID 输出值
+ */
+fix32_t fSensorGetPidOutput(emSensorDevNumTdf emDevNum)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL) {
+        return pstSensor->fPidOutput;
+    }
+    return FIX32_ZERO;
+}
+
+/**
  * @brief 设置传感器互补滤波权重
  */
 void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight)
@@ -173,6 +247,29 @@ void vSensorSetWeight(emSensorDevNumTdf emDevNum, fix32_t fWeight)
     if (pstSensor != NULL) {
         pstSensor->fWeight = fWeight;
     }
+}
+
+/**
+ * @brief 设置陀螺仪类传感器轴选择
+ */
+void vSensorSetAxis(emSensorDevNumTdf emDevNum, emSensorAxisTdf emAxis)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL) {
+        pstSensor->emAxis = emAxis;
+    }
+}
+
+/**
+ * @brief 获取陀螺仪类传感器轴选择
+ */
+emSensorAxisTdf emSensorGetAxis(emSensorDevNumTdf emDevNum)
+{
+    stSensorDeviceTdf *pstSensor = pstSensorGetDevice(emDevNum);
+    if (pstSensor != NULL) {
+        return pstSensor->emAxis;
+    }
+    return emSensorAxisYaw;
 }
 
 /**

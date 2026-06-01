@@ -11,7 +11,11 @@
 #include "ultrasonic_device.h"
 #if ULTRASONIC_IS_ENABLE
 
-#include "delay.h"  // 需确保存在us级延时函数
+#if (QEPACK_PLATFORM == ST)
+    #include "delay.h"
+#else
+    #include "ti_msp_dl_config.h"
+#endif
 
 
 // 超声波设备参数数组
@@ -85,18 +89,27 @@ void vUltrasonicStartMeasure(emUltrasonicDevNumTdf emDevNum)
     pstRunning->fDistance = 0.0f;
     
     // 2. 重置定时器状态
+#if (QEPACK_PLATFORM == ST)
     __HAL_TIM_SET_COUNTER(pstStatic->pstTimHandle, 0);
     __HAL_TIM_CLEAR_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC1);
     __HAL_TIM_CLEAR_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC2);
-    
     // 3. 启动输入捕获
     HAL_TIM_IC_Start(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
     HAL_TIM_IC_Start(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
-    
     // 4. 发送触发信号（10us高电平）
     HAL_GPIO_WritePin(pstStatic->pstTrigGpioBase, pstStatic->usTrigGpioPin, GPIO_PIN_SET);
-    Delay_us(10);  // 10us高电平触发
+    Delay_us(10);
     HAL_GPIO_WritePin(pstStatic->pstTrigGpioBase, pstStatic->usTrigGpioPin, GPIO_PIN_RESET);
+#else
+    DL_Timer_setTimerCount(pstStatic->pstTimHandle->timer_inst, 0);
+    TI_TIM_ClearFlag(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+    TI_TIM_ClearFlag(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+    TI_TIM_IC_Start(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+    TI_TIM_IC_Start(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+    TI_GPIO_WritePin(pstStatic->pstTrigGpioBase, pstStatic->usTrigGpioPin, GPIO_PIN_SET);
+    TI_Delay_us(10);
+    TI_GPIO_WritePin(pstStatic->pstTrigGpioBase, pstStatic->usTrigGpioPin, GPIO_PIN_RESET);
+#endif
     
     // 5. 设置超时时间戳
     pstRunning->ulExpireTime = QE_GET_TICK() + pstRunning->ulTimeoutMs;
@@ -137,17 +150,28 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
     }
     
     // 1. 先检查捕获标志（可能在上次轮询间隔中已完成）
+#if (QEPACK_PLATFORM == ST)
     uint32_t ulCC1Flag = __HAL_TIM_GET_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC1);
     uint32_t ulCC2Flag = __HAL_TIM_GET_FLAG(pstStatic->pstTimHandle, TIM_FLAG_CC2);
+#else
+    uint32_t ulCC1Flag = TI_TIM_GetFlag(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+    uint32_t ulCC2Flag = TI_TIM_GetFlag(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+#endif
     if (ulCC1Flag && ulCC2Flag)
     {
         // 读取捕获值
+#if (QEPACK_PLATFORM == ST)
         pstRunning->ulCCR1 = HAL_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
         pstRunning->ulCCR2 = HAL_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
-
         // 停止输入捕获
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+#else
+        pstRunning->ulCCR1 = TI_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+        pstRunning->ulCCR2 = TI_TIM_ReadCapturedValue(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+        TI_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+        TI_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+#endif
 
         // 计算距离
         vUltrasonicCalcDistance(emDevNum);
@@ -162,8 +186,13 @@ void vUltrasonicDevicePeriodExecute(emUltrasonicDevNumTdf emDevNum)
     if (QE_GET_TICK() >= pstRunning->ulExpireTime)
     {
         // 停止输入捕获
+#if (QEPACK_PLATFORM == ST)
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
         HAL_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+#else
+        TI_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel1);
+        TI_TIM_IC_Stop(pstStatic->pstTimHandle, pstStatic->ulICChannel2);
+#endif
 
         // 更新状态
         pstRunning->emCurrentStatus = emUltrasonicStatus_Timeout;
@@ -187,5 +216,114 @@ uint8_t ucUltrasonicIsMeasureSuccess(emUltrasonicDevNumTdf emDevNum)
     if (emDevNum >= ULTRASONIC_DEV_NUM) return 0;
     return astUltrasonicDeviceParam[emDevNum].stRunningParam.ucIsSuccess;
 }
+
+/* ==================== 传感器基类适配 ==================== */
+
+#if SENSOR_IS_ENABLE
+
+#include "sensor_device.h"
+
+#define ULTRASONIC_SENSOR_LOCAL_MAX  4
+#define ULTRASONIC_SENSOR_TO_LOCAL(dev)  ((uint8_t)((dev) - emSensorUltrasonicDevNum0))
+
+typedef struct {
+    stSensorDeviceTdf      stBase;
+    emSensorDevNumTdf      emSensorDevNum;
+    fix32_t                fTargetValue;
+} stUltrasonicSensorWrapperTdf;
+
+static void vUltrasonicSensorInit(void *pstSensor)
+{
+    (void)pstSensor;
+}
+
+static void vUltrasonicSensorPeriodExecute(void *pstSensor)
+{
+    stUltrasonicSensorWrapperTdf *pstWrapper = (stUltrasonicSensorWrapperTdf *)pstSensor;
+    emUltrasonicDevNumTdf emLocalDev = (emUltrasonicDevNumTdf)ULTRASONIC_SENSOR_TO_LOCAL(pstWrapper->emSensorDevNum);
+    if (emLocalDev >= ULTRASONIC_DEV_NUM) return;
+
+    /* 仅空闲时自动启动测量，Completed/Timeout 状态保留结果供 fGetValue 读取 */
+    emUltrasonicStatusTdf emStatus = astUltrasonicDeviceParam[emLocalDev].stRunningParam.emCurrentStatus;
+    if (emStatus == emUltrasonicStatus_Idle) {
+        vUltrasonicStartMeasure(emLocalDev);
+    }
+
+    /* 推进状态机 */
+    vUltrasonicDevicePeriodExecute(emLocalDev);
+}
+
+static fix32_t fUltrasonicSensorGetValue(void *pstSensor)
+{
+    stUltrasonicSensorWrapperTdf *pstWrapper = (stUltrasonicSensorWrapperTdf *)pstSensor;
+    emUltrasonicDevNumTdf emLocalDev = (emUltrasonicDevNumTdf)ULTRASONIC_SENSOR_TO_LOCAL(pstWrapper->emSensorDevNum);
+    if (emLocalDev >= ULTRASONIC_DEV_NUM) return FIX32_ZERO;
+    return fix32_from_float(astUltrasonicDeviceParam[emLocalDev].stRunningParam.fDistance);
+}
+
+static fix32_t fUltrasonicSensorGetAccumulatedValue(void *pstSensor)
+{
+    /* 距离无累加概念，与 fGetValue 相同 */
+    return fUltrasonicSensorGetValue(pstSensor);
+}
+
+static void vUltrasonicSensorReset(void *pstSensor)
+{
+    stUltrasonicSensorWrapperTdf *pstWrapper = (stUltrasonicSensorWrapperTdf *)pstSensor;
+    emUltrasonicDevNumTdf emLocalDev = (emUltrasonicDevNumTdf)ULTRASONIC_SENSOR_TO_LOCAL(pstWrapper->emSensorDevNum);
+    if (emLocalDev >= ULTRASONIC_DEV_NUM) return;
+
+    astUltrasonicDeviceParam[emLocalDev].stRunningParam.emCurrentStatus = emUltrasonicStatus_Idle;
+    astUltrasonicDeviceParam[emLocalDev].stRunningParam.ucIsSuccess = 0;
+    astUltrasonicDeviceParam[emLocalDev].stRunningParam.fDistance = 0.0f;
+    pstWrapper->fTargetValue = FIX32_ZERO;
+}
+
+static void vUltrasonicSensorSetTarget(void *pstSensor, fix32_t fTarget)
+{
+    stUltrasonicSensorWrapperTdf *pstWrapper = (stUltrasonicSensorWrapperTdf *)pstSensor;
+    pstWrapper->fTargetValue = fTarget;
+}
+
+static fix32_t fUltrasonicSensorGetTarget(void *pstSensor)
+{
+    stUltrasonicSensorWrapperTdf *pstWrapper = (stUltrasonicSensorWrapperTdf *)pstSensor;
+    return pstWrapper->fTargetValue;
+}
+
+static stSensorVTableTdf g_stUltrasonicSensorVTable = {
+    vUltrasonicSensorInit,
+    vUltrasonicSensorPeriodExecute,
+    fUltrasonicSensorGetValue,
+    fUltrasonicSensorGetAccumulatedValue,
+    vUltrasonicSensorReset,
+    vUltrasonicSensorSetTarget,
+    fUltrasonicSensorGetTarget,
+};
+
+static stUltrasonicSensorWrapperTdf g_astUltrasonicSensorDevices[ULTRASONIC_SENSOR_LOCAL_MAX];
+
+void vUltrasonicSensorRegister(emSensorDevNumTdf emSensorDevNum, void *pstInit)
+{
+    (void)pstInit;
+    uint8_t ucLocalIdx = ULTRASONIC_SENSOR_TO_LOCAL(emSensorDevNum);
+    if (ucLocalIdx >= ULTRASONIC_SENSOR_LOCAL_MAX) return;
+
+    stUltrasonicSensorWrapperTdf *pstWrapper = &g_astUltrasonicSensorDevices[ucLocalIdx];
+    memset(pstWrapper, 0, sizeof(stUltrasonicSensorWrapperTdf));
+
+    pstWrapper->stBase.emType          = emSensorTypeUltrasonic;
+    pstWrapper->stBase.pstVTable       = &g_stUltrasonicSensorVTable;
+    pstWrapper->stBase.ucEnable        = 1;
+    pstWrapper->stBase.fWeight         = FIX32_ONE;
+    pstWrapper->stBase.emPidDevNum     = emNoPid;
+    pstWrapper->stBase.usPidPeriodMs   = 0;
+    pstWrapper->stBase.ulPidLastTickMs = 0;
+    pstWrapper->emSensorDevNum         = emSensorDevNum;
+
+    vSensorRegisterDevice(emSensorDevNum, &pstWrapper->stBase);
+}
+
+#endif /* SENSOR_IS_ENABLE */
 
 #endif
