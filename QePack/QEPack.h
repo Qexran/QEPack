@@ -106,6 +106,10 @@
     #include "joystick_device.h"
 #endif
 
+#if HMI_IS_ENABLE
+    #include "hmi_device.h"
+#endif
+
 // 生成配置结构体
 #define TI_GET_I2C_STRUCTURE(I2C_NAME) \
     (stI2CTdf){ \

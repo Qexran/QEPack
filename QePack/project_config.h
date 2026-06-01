@@ -263,6 +263,13 @@ typedef enum
     #define BNO08X_SENSOR_0                              emSensorNBO08XDevNum0
 #endif
 
+/* HMI 串口屏 相关 */
+#define HMI_IS_ENABLE                                   0                               // HMI 模块总开关
+#define HMI_DEV_NUM                                     1                               // HMI 设备数量
+#define HMI_RX_BUF_MAX_LEN                             128                             // HMI 接收缓冲区最大长度
+#define HMI_CMD_BUF_MAX_LEN                            256                             // HMI 命令格式化缓冲区长度
+#define HMI0                                            emHmiDevNum0                    // HMI 设备别名
+
 /* 步骤机 相关 */
 #define STEP_M_ENABLE                                   1                               // 步骤机 模块总开关
 #define STEP_M_MAX_STEP_NUM                             20                              // 最大步骤数量
